@@ -14,7 +14,7 @@ import {
   ShieldAlert
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { analyzePlantImage } from '../../services/plantDiseaseService';
+import { analyzePlantImage, detectPlantLeaves } from '../../services/plantDiseaseService';
 
 export default function CameraScanner({ onCapture, onClose, onSwitchToUpload }) {
   const { t } = useTranslation();
@@ -24,6 +24,7 @@ export default function CameraScanner({ onCapture, onClose, onSwitchToUpload }) 
   const activeStreamRef = useRef(null);
   const isMountedRef = useRef(true);
   const initIdRef = useRef(0);
+  const isDetectingRef = useRef(false);
 
   // Component State
   // Status: 'requesting' | 'starting' | 'ready' | 'error'
@@ -41,6 +42,11 @@ export default function CameraScanner({ onCapture, onClose, onSwitchToUpload }) 
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [scanError, setScanError] = useState(null);
   const [analysisStep, setAnalysisStep] = useState(1);
+
+  // Real YOLOv8 Object Detection State
+  const [liveDetections, setLiveDetections] = useState([]);
+  const [isLiveDetectEnabled, setIsLiveDetectEnabled] = useState(true);
+  const [personWarning, setPersonWarning] = useState(null);
 
   // Stop all active camera tracks cleanly without triggering re-render loops
   const stopActiveStream = useCallback(() => {
@@ -282,6 +288,53 @@ export default function CameraScanner({ onCapture, onClose, onSwitchToUpload }) 
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose, stopActiveStream]);
 
+  // Real-Time YOLO Plant Leaf Object Detection Loop
+  useEffect(() => {
+    if (cameraStatus !== 'ready' || capturedImage || !isLiveDetectEnabled) {
+      setLiveDetections([]);
+      setPersonWarning(null);
+      return;
+    }
+
+    const intervalId = setInterval(async () => {
+      const video = videoRef.current;
+      if (!video || video.videoWidth === 0 || isDetectingRef.current) return;
+
+      isDetectingRef.current = true;
+      try {
+        const width = video.videoWidth;
+        const height = video.videoHeight;
+        const canvas = document.createElement('canvas');
+        const scale = Math.min(1, 480 / Math.max(width, height));
+        canvas.width = Math.round(width * scale);
+        canvas.height = Math.round(height * scale);
+        const ctx = canvas.getContext('2d');
+        if (facingMode === 'user') {
+          ctx.translate(canvas.width, 0);
+          ctx.scale(-1, 1);
+        }
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const frameDataUrl = canvas.toDataURL('image/jpeg', 0.65);
+
+        const res = await detectPlantLeaves(frameDataUrl);
+        if (res && res.success) {
+          setLiveDetections(res.detections || []);
+          if (res.has_person && !res.has_leaves) {
+            setPersonWarning(t('plantHealth.personAlert', 'Person detected in viewfinder. Please aim camera at a plant leaf.'));
+          } else {
+            setPersonWarning(null);
+          }
+        }
+      } catch (err) {
+        // Frame drop tolerance
+      } finally {
+        isDetectingRef.current = false;
+      }
+    }, 950);
+
+    return () => clearInterval(intervalId);
+  }, [cameraStatus, capturedImage, isLiveDetectEnabled, facingMode, t]);
+
   // Switch between front and rear cameras
   const handleToggleFacingMode = () => {
     setFacingMode(prev => (prev === 'environment' ? 'user' : 'environment'));
@@ -340,6 +393,18 @@ export default function CameraScanner({ onCapture, onClose, onSwitchToUpload }) 
 
       setCapturedImage(dataUrl);
       setScanError(null);
+
+      // Run high-resolution YOLO detection on captured frame for review boxes
+      detectPlantLeaves(dataUrl).then(res => {
+        if (res && res.success) {
+          setLiveDetections(res.detections || []);
+          if (res.has_person && !res.has_leaves) {
+            setPersonWarning(t('plantHealth.personAlert', 'Person detected in photo. Please aim at a crop leaf.'));
+          } else {
+            setPersonWarning(null);
+          }
+        }
+      }).catch(() => {});
     } catch (err) {
       console.error('AgriSense: Frame capture error:', err);
     }
@@ -348,6 +413,8 @@ export default function CameraScanner({ onCapture, onClose, onSwitchToUpload }) 
   // Retake photo: clear captured frame and restart camera
   const handleRetake = () => {
     setCapturedImage(null);
+    setLiveDetections([]);
+    setPersonWarning(null);
     setScanError(null);
     setIsAnalyzing(false);
     startCamera(facingMode);
@@ -431,6 +498,22 @@ export default function CameraScanner({ onCapture, onClose, onSwitchToUpload }) 
           </div>
 
           <div className="flex items-center space-x-2">
+            {/* YOLOv8 Live Detection Toggle Button */}
+            {!capturedImage && cameraStatus === 'ready' && (
+              <button
+                onClick={() => setIsLiveDetectEnabled(!isLiveDetectEnabled)}
+                className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-1.5 ${
+                  isLiveDetectEnabled
+                    ? 'bg-emerald-600/30 text-emerald-300 border border-emerald-500/50 shadow-xs'
+                    : 'bg-slate-800 text-slate-400 border border-slate-700 hover:text-white'
+                }`}
+                title={isLiveDetectEnabled ? 'Pause YOLOv8 Live Detection' : 'Resume YOLOv8 Live Detection'}
+              >
+                <span className={`w-2 h-2 rounded-full ${isLiveDetectEnabled ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
+                <span>YOLO: {isLiveDetectEnabled ? 'LIVE' : 'PAUSED'}</span>
+              </button>
+            )}
+
             {/* Torch toggle button */}
             {hasTorch && !capturedImage && cameraStatus === 'ready' && (
               <button
@@ -579,6 +662,58 @@ export default function CameraScanner({ onCapture, onClose, onSwitchToUpload }) 
                 } ${facingMode === 'user' ? 'scale-x-[-1]' : ''}`}
               />
 
+              {/* Real-Time YOLOv8 Plant & Leaf Bounding Boxes */}
+              {cameraStatus === 'ready' && isLiveDetectEnabled && liveDetections && liveDetections.length > 0 && (
+                <div className="absolute inset-0 pointer-events-none overflow-hidden z-10">
+                  {liveDetections.map((det, idx) => {
+                    const box = det.box_percent || {
+                      x: det.x || 0,
+                      y: det.y || 0,
+                      width: det.width || 0,
+                      height: det.height || 0
+                    };
+                    const isPerson = det.is_person || det.class_name === 'person';
+                    return (
+                      <div
+                        key={det.id || idx}
+                        className={`absolute rounded-xl transition-all duration-150 pointer-events-none ${
+                          isPerson
+                            ? 'border-2 border-amber-400 bg-amber-500/10'
+                            : 'border-2 border-emerald-400 bg-emerald-500/15 shadow-md shadow-emerald-500/20'
+                        }`}
+                        style={{
+                          left: `${box.x}%`,
+                          top: `${box.y}%`,
+                          width: `${box.width}%`,
+                          height: `${box.height}%`
+                        }}
+                      >
+                        <div
+                          className={`absolute -top-6 left-0 px-2 py-0.5 rounded text-[10px] font-mono font-bold whitespace-nowrap shadow flex items-center space-x-1 ${
+                            isPerson
+                              ? 'bg-amber-600 text-white'
+                              : 'bg-emerald-700 text-emerald-100 border border-emerald-400/40'
+                          }`}
+                        >
+                          <span>{isPerson ? '⚠️ Person' : `🌿 ${det.label || det.class_name}`}</span>
+                          <span className="opacity-80">({det.confidence}%)</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Person Warning Notification Banner */}
+              {cameraStatus === 'ready' && personWarning && (
+                <div className="absolute top-14 inset-x-4 z-20 flex items-center justify-center pointer-events-none animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="bg-amber-950/95 border border-amber-500/80 text-amber-200 text-xs px-3.5 py-2 rounded-xl flex items-center space-x-2 shadow-xl backdrop-blur-md">
+                    <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0" />
+                    <span className="font-semibold">{personWarning}</span>
+                  </div>
+                </div>
+              )}
+
               {/* Agronomic Target Reticle (Only visible when camera is ready) */}
               {cameraStatus === 'ready' && (
                 <div className="absolute inset-0 pointer-events-none flex items-center justify-center p-6 select-none">
@@ -619,18 +754,60 @@ export default function CameraScanner({ onCapture, onClose, onSwitchToUpload }) 
 
           {/* 5. Captured Leaf Inspection Review */}
           {capturedImage && (
-            <div className="relative w-full h-full flex items-center justify-center bg-black animate-in fade-in duration-200">
-              <img
-                src={capturedImage}
-                alt="Captured Leaf Specimen"
-                className="max-h-[70vh] w-auto object-contain rounded-xl shadow-2xl"
-              />
+            <div className="relative w-full h-full flex items-center justify-center bg-black animate-in fade-in duration-200 overflow-hidden">
+              <div className="relative max-h-[70vh] flex items-center justify-center">
+                <img
+                  src={capturedImage}
+                  alt="Captured Leaf Specimen"
+                  className="max-h-[70vh] w-auto object-contain rounded-xl shadow-2xl block"
+                />
+
+                {/* YOLO Bounding Boxes Over Captured Leaf */}
+                {liveDetections && liveDetections.map((det, idx) => {
+                  const box = det.box_percent || {
+                    x: det.x || 0,
+                    y: det.y || 0,
+                    width: det.width || 0,
+                    height: det.height || 0
+                  };
+                  const isPerson = det.is_person || det.class_name === 'person';
+                  return (
+                    <div
+                      key={det.id || idx}
+                      className={`absolute rounded-xl pointer-events-none transition-all ${
+                        isPerson
+                          ? 'border-2 border-amber-400 bg-amber-500/15'
+                          : 'border-2 border-emerald-400 bg-emerald-500/20 shadow-md shadow-emerald-500/30'
+                      }`}
+                      style={{
+                        left: `${box.x}%`,
+                        top: `${box.y}%`,
+                        width: `${box.width}%`,
+                        height: `${box.height}%`
+                      }}
+                    >
+                      <div
+                        className={`absolute -top-6 left-0 px-2 py-0.5 rounded text-[10px] font-mono font-bold whitespace-nowrap shadow flex items-center space-x-1 ${
+                          isPerson ? 'bg-amber-600 text-white' : 'bg-emerald-700 text-emerald-100 border border-emerald-400/40'
+                        }`}
+                      >
+                        <span>{isPerson ? '⚠️ Person' : `🌿 ${det.label || det.class_name}`}</span>
+                        <span className="opacity-80">({det.confidence}%)</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
 
               {/* Status Header Badge */}
               {!isAnalyzing && !scanError && (
                 <div className="absolute top-4 left-4 bg-emerald-900/95 text-emerald-100 text-xs px-3.5 py-1.5 rounded-full border border-emerald-500/50 font-semibold flex items-center space-x-2 shadow-lg backdrop-blur-xs">
                   <Check className="w-3.5 h-3.5 text-emerald-300 shrink-0" />
-                  <span>{t('plantHealth.sampleCaptured', 'Sample Captured — Ready for Inspection')}</span>
+                  <span>
+                    {liveDetections && liveDetections.filter(d => !d.is_person && d.class_name !== 'person').length > 0
+                      ? `${liveDetections.filter(d => !d.is_person && d.class_name !== 'person').length} Leaf Region(s) Localized by YOLOv8 — Ready for Analysis`
+                      : t('plantHealth.sampleCaptured', 'Sample Captured — Ready for Inspection')}
+                  </span>
                 </div>
               )}
 

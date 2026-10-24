@@ -173,7 +173,7 @@ export async function fetchWeatherData(location = DEFAULT_REAL_LOCATION) {
     sunset: futureDaily.sunset?.[0] || null
   };
 
-  return {
+  const result = {
     isDemo: false,
     provider: 'Open-Meteo Weather API',
     modelSources: 'ECMWF IFS (0.1°), DWD ICON, NOAA GFS, WMO Land Stations',
@@ -190,6 +190,14 @@ export async function fetchWeatherData(location = DEFAULT_REAL_LOCATION) {
     historical: historyDaily,
     fetchedAt: new Date().toISOString()
   };
+
+  try {
+    localStorage.setItem('agrisense_cached_weather', JSON.stringify(result));
+  } catch (e) {
+    // Ignore storage quota limits
+  }
+
+  return result;
 }
 
 /**

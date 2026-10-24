@@ -12,11 +12,14 @@
 
 // Model Endpoint & API Configurations
 export const MODEL_CONFIG = {
-  apiUrl: (typeof import.meta !== 'undefined' && import.meta.env?.VITE_PLANT_DISEASE_API_URL) || null,
+  apiUrl: (typeof import.meta !== 'undefined' && import.meta.env?.VITE_PLANT_DISEASE_API_URL) || 'http://localhost:8000',
   hfToken: (typeof import.meta !== 'undefined' && (import.meta.env?.VITE_HUGGINGFACE_API_KEY || import.meta.env?.VITE_HF_TOKEN)) || null,
   hfModelId: 'linkanjarad/mobilenet_v2_1.0_224-plant-disease-identification',
-  activeEngineName: 'AgriSense Agro-Vision Deep Inference Engine (MobileNet & PlantVillage Pathology Architecture)'
+  yoloModelId: 'foduucom/plant-leaf-detection-and-classification',
+  activeEngineName: 'AgriSense Dual-Model AI (YOLOv8 Leaf Detector + MobileNetV2 PlantVillage Pathology Model)'
 };
+
+export const CV_BACKEND_URL = MODEL_CONFIG.apiUrl;
 
 // Validated Agricultural Pathology Knowledge Base
 export const CROP_DISEASE_DATABASE = {
@@ -584,6 +587,783 @@ export const CROP_DISEASE_DATABASE = {
     escalationAdvisory: 'Virus transmission occurs within minutes of whitefly feeding. Control whitefly populations below economic injury level.'
   },
 
+  'citrus_greening': {
+    cropName: 'Citrus / Orange',
+    botanicalName: 'Citrus sinensis',
+    diseaseName: 'Citrus Greening (Huanglongbing - HLB)',
+    pathogen: 'Candidatus Liberibacter asiaticus (Bacterial Pathogen via Asian Citrus Psyllid)',
+    severity: 'CRITICAL',
+    symptoms: [
+      'Asymmetrical, blotchy chlorotic mottle across leaf blade crossing veins',
+      'Thickened, corky veins with upright, leathery foliage',
+      'Small, lopsided green fruit with bitter flavor and dark aborted seeds',
+      'Severe twig dieback and progressive canopy thinning'
+    ],
+    weatherRiskConditions: {
+      optimalTempMin: 20,
+      optimalTempMax: 30,
+      minHumidity: 60,
+      requiresLeafWetness: false,
+      riskExplanation: 'Warm temperatures (20-30°C) favor high reproduction and dispersal activity of the Asian citrus psyllid vector.'
+    },
+    treatments: {
+      immediate: 'Quarantine infected grove section and eradicate infected trees to prevent psyllid vector transmission.',
+      organic: 'Release parasitic wasps (Tamarixia radiata) and apply horticultural mineral oils to control psyllid nymphs.',
+      chemical: 'Apply systemic insecticides (e.g. imidacloprid, thiamethoxam) to manage vector populations in buffer zones.'
+    },
+    prevention: [
+      'Plant only certified pathogen-free nursery budwood from enclosed screenhouses.',
+      'Conduct visual scouting every 14 days during new vegetative flush flushes.',
+      'Maintain rigorous regional vector control in coordination with neighboring groves.'
+    ],
+    escalationAdvisory: 'Huanglongbing is incurable. Prompt eradication of infected trees is necessary to protect surrounding citrus orchards.'
+  },
+
+  'strawberry_leaf_scorch': {
+    cropName: 'Strawberry',
+    botanicalName: 'Fragaria × ananassa',
+    diseaseName: 'Leaf Scorch',
+    pathogen: 'Diplocarpon earlianum (Fungal Pathogen)',
+    severity: 'MODERATE_TO_HIGH',
+    symptoms: [
+      'Numerous small, irregular purple to dark brown spots on upper leaf surface',
+      'Lesions coalesce causing the leaf blade to curl upward and look burnt (scorched)',
+      'Severe defoliation leading to stunted fruit size and reduced yield'
+    ],
+    weatherRiskConditions: {
+      optimalTempMin: 18,
+      optimalTempMax: 26,
+      minHumidity: 80,
+      requiresLeafWetness: true,
+      riskExplanation: 'Warm humid weather with extended leaf wetness (8-12 hours) creates high spore germination pressure.'
+    },
+    treatments: {
+      immediate: 'Mow or rake out infected foliage after harvest. Avoid overhead irrigation.',
+      organic: 'Apply bio-fungicides based on Bacillus amyloliquefaciens or copper fungicides.',
+      chemical: 'Apply protectant fungicides (captan, pyraclostrobin) during vegetative flush.'
+    },
+    prevention: [
+      'Select scorch-resistant strawberry cultivars.',
+      'Maintain adequate plant spacing for rapid canopy drying.',
+      'Renovate beds immediately after harvest.'
+    ],
+    escalationAdvisory: 'If scorch affects more than 25% of leaves prior to bloom, apply labeled systemic fungicides.'
+  },
+
+  'cedar_apple_rust': {
+    cropName: 'Apple',
+    botanicalName: 'Malus domestica',
+    diseaseName: 'Cedar Apple Rust',
+    pathogen: 'Gymnosporangium juniperi-virginianae (Rust Fungus)',
+    severity: 'MODERATE_TO_HIGH',
+    symptoms: [
+      'Bright yellow-orange or reddish circular spots on upper leaf surfaces',
+      'Tiny black pycnia specks forming inside yellow lesions as spots mature',
+      'Tube-like cylindrical aecia spore structures protruding on leaf undersides'
+    ],
+    weatherRiskConditions: {
+      optimalTempMin: 12,
+      optimalTempMax: 24,
+      minHumidity: 85,
+      requiresLeafWetness: true,
+      riskExplanation: 'Rainy spring conditions when Eastern red cedars disperse gell-like telial horns to apple leaves.'
+    },
+    treatments: {
+      immediate: 'Rake and destroy infected fallen leaves. Remove nearby volunteer red cedar or juniper trees within 500m.',
+      organic: 'Sulfur or copper sprays applied from tight cluster through petal fall.',
+      chemical: 'Myclobutanil, propiconazole, or mancozeb at pink bud stage under local agronomic label.'
+    },
+    prevention: [
+      'Plant rust-resistant apple varieties (e.g. Liberty, Enterprise, Redfree).',
+      'Scout adjacent windbreak conifers for telial rust galls and prune them before spring rain.',
+      'Maintain good tree pruning for rapid leaf drying.'
+    ],
+    escalationAdvisory: 'If premature defoliation exceeds 25% of the canopy, protect subsequent season fruit buds with early bloom fungicide coverage.'
+  },
+
+  'cherry_powdery_mildew': {
+    cropName: 'Cherry',
+    botanicalName: 'Prunus avium',
+    diseaseName: 'Cherry Powdery Mildew',
+    pathogen: 'Podosphaera clandestina (Fungal Pathogen)',
+    severity: 'MODERATE',
+    symptoms: [
+      'Patches of white, powdery or web-like fungal mycelium on the underside of young leaves',
+      'Upward curling, puckering, and crinkling of infected terminal foliage',
+      'Blunted shoot growth with distorted leaves turning chlorotic and dropping prematurely'
+    ],
+    weatherRiskConditions: {
+      optimalTempMin: 18,
+      optimalTempMax: 28,
+      minHumidity: 65,
+      requiresLeafWetness: false,
+      riskExplanation: 'Warm, dry weather with high morning humidity favors airborne conidial spread.'
+    },
+    treatments: {
+      immediate: 'Prune out infected terminal shoots. Avoid excess nitrogen which spurs susceptible succulent growth.',
+      organic: 'Potassium bicarbonate (e.g. Armicarb), horticultural oils, or sulfur formulations.',
+      chemical: 'Quinoxyfen, triflumizole, or tebuconazole following regional fruit advisory guidelines.'
+    },
+    prevention: [
+      'Ensure adequate canopy airflow through regular winter pruning.',
+      'Use drip or under-tree micro-sprinklers instead of overhead irrigation.',
+      'Monitor water shoots and young suckers where infections start.'
+    ],
+    escalationAdvisory: 'Late season mildew on foliage can overwinter cleistothecia in bark crevices, seeding early infections next spring.'
+  },
+
+  'corn_gray_leaf_spot': {
+    cropName: 'Corn / Maize',
+    botanicalName: 'Zea mays',
+    diseaseName: 'Gray Leaf Spot (GLS)',
+    pathogen: 'Cercospora zeae-maydis (Fungal Pathogen)',
+    severity: 'HIGH',
+    symptoms: [
+      'Distinct rectangular, narrow tan-to-gray lesions restricted strictly between parallel leaf veins',
+      'Lesions elongate up to 2-7 cm with sharp, straight parallel margins',
+      'Extensive blighting of whole leaves leading to stalk lodging and compromised ear fill'
+    ],
+    weatherRiskConditions: {
+      optimalTempMin: 22,
+      optimalTempMax: 30,
+      minHumidity: 85,
+      requiresLeafWetness: true,
+      riskExplanation: 'Warm humid weather with extended periods of overcast skies and dew (>12 hours) promotes severe leaf blighting.'
+    },
+    treatments: {
+      immediate: 'Inspect ear leaf and two leaves above; if lesions reach 5% area before blister stage, plan intervention.',
+      organic: 'Bio-fungicide sprays based on Bacillus subtilis or Trichoderma harzianum.',
+      chemical: 'Strobilurin and triazole fungicide mixtures (e.g. azoxystrobin + propiconazole) at tasseling (VT to R1).'
+    },
+    prevention: [
+      'Plant high-yielding hybrids with proven genetic resistance ratings for Gray Leaf Spot.',
+      'Rotate with non-host crops such as soybean or alfalfa to reduce fungal residue.',
+      'Manage corn stover by shallow incorporation or chopping to accelerate residue breakdown.'
+    ],
+    escalationAdvisory: 'If disease reaches the ear leaf at or before silking, grain yield loss can exceed 30% without protection.'
+  },
+
+  'grape_esca': {
+    cropName: 'Grape',
+    botanicalName: 'Vitis vinifera',
+    diseaseName: 'Esca / Black Measles',
+    pathogen: 'Phaeomoniella chlamydospora & Fomitiporia mediterranea complex',
+    severity: 'CRITICAL',
+    symptoms: [
+      'Tiger-stripe foliar chlorosis and necrosis (interveinal yellow and reddish-brown bands with green margins)',
+      'Sudden apoplexy (complete collapse and withering of whole vine canopy in mid-summer heat)',
+      'Small, dark purple spots (measles) on berry skins accompanied by longitudinal cane cracking'
+    ],
+    weatherRiskConditions: {
+      optimalTempMin: 25,
+      optimalTempMax: 35,
+      minHumidity: 50,
+      requiresLeafWetness: false,
+      riskExplanation: 'High evaporative transpiration during hot summer spells stresses vascular xylem plugged by wood fungi.'
+    },
+    treatments: {
+      immediate: 'Mark affected vines for remedial pruning or surgical trunk renewal during the dormant season.',
+      organic: 'Protect pruning wounds with Trichoderma-based bio-protectants immediately after winter cut.',
+      chemical: 'Paint fresh pruning wounds with wound sealants containing thiophanate-methyl or pyraclostrobin.'
+    },
+    prevention: [
+      'Delay annual vine pruning as late as possible in winter when wound susceptibility is shortest.',
+      'Disinfect pruning shears regularly with 70% isopropyl alcohol or 10% sodium hypochlorite.',
+      'Avoid making large flush cuts close to trunk cordons.'
+    ],
+    escalationAdvisory: 'Esca is a progressive vascular trunk disease. Rejuvenate symptomatic cordons before rootstock death occurs.'
+  },
+
+  'grape_leaf_blight': {
+    cropName: 'Grape',
+    botanicalName: 'Vitis vinifera',
+    diseaseName: 'Isariopsis Leaf Spot / Leaf Blight',
+    pathogen: 'Pseudocercospora cladosporioides (Fungus)',
+    severity: 'MODERATE_TO_HIGH',
+    symptoms: [
+      'Irregular large reddish-brown to dark brown necrotic blotches on mature foliage',
+      'Blackish moldy velvety tufts of conidiophores on the undersurface of lesions',
+      'Premature defoliation late in the season, delaying cane ripening and winter hardiness'
+    ],
+    weatherRiskConditions: {
+      optimalTempMin: 22,
+      optimalTempMax: 29,
+      minHumidity: 80,
+      requiresLeafWetness: true,
+      riskExplanation: 'Warm, damp microclimates inside dense vine canopies accelerate late season spore multiplication.'
+    },
+    treatments: {
+      immediate: 'Open up the canopy through lateral shoot thinning and basal leaf removal around grape clusters.',
+      organic: 'Copper hydroxide or copper oxychloride post-harvest.',
+      chemical: 'Difenoconazole, azoxystrobin, or kresoxim-methyl applied according to pre-harvest intervals.'
+    },
+    prevention: [
+      'Ensure proper vine shoot positioning (VSP) for maximum sunlight penetration.',
+      'Avoid high nitrogen fertilization that causes thick, shaded interior leaves.',
+      'Shred and disk vine leaves after autumn leaf fall.'
+    ],
+    escalationAdvisory: 'Early defoliation impedes sugar accumulation in ripening grapes and weakens vine carbohydrate reserves.'
+  },
+
+  'peach_bacterial_spot': {
+    cropName: 'Peach',
+    botanicalName: 'Prunus persica',
+    diseaseName: 'Bacterial Spot',
+    pathogen: 'Xanthomonas arboricola pv. pruni',
+    severity: 'HIGH',
+    symptoms: [
+      'Small, angular, water-soaked dark purple to black spots on leaves (1-3 mm)',
+      'Centers of leaf lesions fall out, giving leaves a distinctive "shot-hole" appearance',
+      'Severe yellowing of leaf tips and premature defoliation; pitted, cracked sunken lesions on peach fruit'
+    ],
+    weatherRiskConditions: {
+      optimalTempMin: 20,
+      optimalTempMax: 29,
+      minHumidity: 80,
+      requiresLeafWetness: true,
+      riskExplanation: 'Frequent spring rains and windy storms carry bacteria through stomata and abrasions.'
+    },
+    treatments: {
+      immediate: 'Avoid excess summer pruning that generates succulent shoot tissue during wet periods.',
+      organic: 'Low-rate preventative copper sprays or bio-fungicide Bacillus subtilis from petal fall.',
+      chemical: 'Oxytetracycline or dodine formulations applied under local extension fruit tree recommendations.'
+    },
+    prevention: [
+      'Plant bacterial spot-resistant peach cultivars adapted to your geographical zone.',
+      'Establish windbreaks around sandy orchard blocks to minimize sandblasting wind injury.',
+      'Avoid overhead sprinkler irrigation.'
+    ],
+    escalationAdvisory: 'Fruit infections cause deep gumming cracks that invite secondary brown rot fungi; maintain early spring protective sprays.'
+  },
+
+  'squash_powdery_mildew': {
+    cropName: 'Squash / Cucurbits',
+    botanicalName: 'Cucurbita pepo',
+    diseaseName: 'Cucurbit Powdery Mildew',
+    pathogen: 'Podosphaera xanthii (Fungus)',
+    severity: 'MODERATE_TO_HIGH',
+    symptoms: [
+      'White talcum powder-like fungal spots on upper and lower leaf surfaces, petioles, and stems',
+      'Foliage turns chlorotic yellow, browns, shrivels, and dies back prematurely',
+      'Exposed fruit suffers sunburn and lacks sugar accumulation, resulting in poor flavor'
+    ],
+    weatherRiskConditions: {
+      optimalTempMin: 20,
+      optimalTempMax: 28,
+      minHumidity: 60,
+      requiresLeafWetness: false,
+      riskExplanation: 'Dense shade, dry soil, and moderate temperatures with high relative humidity favor rapid conidial spread.'
+    },
+    treatments: {
+      immediate: 'Remove severely infected older leaves at the base of the plant to improve airflow.',
+      organic: 'Neem oil, potassium bicarbonate (MilStop), or dilute milk spray (30-40% in water).',
+      chemical: 'Triflumizole, myclobutanil, or cyflufenamid rotated according to FRAC resistance codes.'
+    },
+    prevention: [
+      'Plant PM-resistant squash cultivars (e.g. Success PM, Dunja).',
+      'Ensure wide spacing between hills and rows for maximum sunlight penetration.',
+      'Irrigate at ground level using drip tape.'
+    ],
+    escalationAdvisory: 'Powdery mildew can reduce squash yield by 50% if unmanaged before peak fruit set. Initiate sprays at first visual sign.'
+  },
+
+  'tomato_spider_mites': {
+    cropName: 'Tomato',
+    botanicalName: 'Solanum lycopersicum',
+    diseaseName: 'Two-Spotted Spider Mite Infestation',
+    pathogen: 'Tetranychus urticae (Arachnid Pest)',
+    severity: 'MODERATE_TO_HIGH',
+    symptoms: [
+      'Fine yellow stippling or bronzed speckling across upper leaf surfaces',
+      'Delicate silky webbing on the undersides of leaves and between petioles',
+      'Leaves turn dry, papery, brown, and drop prematurely; severe canopy defoliation'
+    ],
+    weatherRiskConditions: {
+      optimalTempMin: 28,
+      optimalTempMax: 38,
+      minHumidity: 40,
+      requiresLeafWetness: false,
+      riskExplanation: 'Hot, dry, dusty weather accelerates the spider mite reproductive lifecycle to under 5 days.'
+    },
+    treatments: {
+      immediate: 'Hose down plants with strong water spray to knock mites and webs off leaf undersides.',
+      organic: 'Release predatory mites (Phytoseiulus persimilis) or apply insecticidal soap and neem oil.',
+      chemical: 'Abamectin, bifenazate, or spiromesifen strictly rotating active modes of action.'
+    },
+    prevention: [
+      'Dampen dirt pathways to minimize dust, which deters natural predatory insects.',
+      'Avoid broad-spectrum synthetic pyrethroid insecticides that wipe out natural mite predators.',
+      'Scout lower leaves with a 10x hand lens during warm weather.'
+    ],
+    escalationAdvisory: 'Spider mite populations can explode tenfold in 7 days during heat waves. Take action upon first sighting of webbing.'
+  },
+
+  'tomato_target_spot': {
+    cropName: 'Tomato',
+    botanicalName: 'Solanum lycopersicum',
+    diseaseName: 'Target Spot',
+    pathogen: 'Corynespora cassiicola (Fungus)',
+    severity: 'MODERATE_TO_HIGH',
+    symptoms: [
+      'Small, circular brown lesions with subtle concentric rings and distinct pale yellow halos',
+      'Lesion centers frequently rupture, tear, or fall out creating ragged holes',
+      'Advanced defoliation of lower and middle canopy leaves exposing fruit'
+    ],
+    weatherRiskConditions: {
+      optimalTempMin: 20,
+      optimalTempMax: 28,
+      minHumidity: 80,
+      requiresLeafWetness: true,
+      riskExplanation: 'Prolonged leaf wetness and warm temperatures facilitate rapid germination of conidia.'
+    },
+    treatments: {
+      immediate: 'Strip affected lower leaves and dispose away from the field. Water exclusively by drip irrigation.',
+      organic: 'Preventative copper hydroxide or copper octanoate applied every 7-10 days.',
+      chemical: 'Fluopyram, pyraclostrobin, or chlorothalonil according to local tomato pest management schedule.'
+    },
+    prevention: [
+      'Stake, trellis, and prune tomatoes to maintain an open canopy architecture.',
+      'Maintain wide spacing between rows to accelerate morning dew evaporation.',
+      'Rotate fields away from cucurbit, solanaceous, and legume crops for 2 years.'
+    ],
+    escalationAdvisory: 'Target spot closely resembles early blight but progresses faster under warm wet conditions; confirm etiology before treating.'
+  },
+
+  'tomato_yellow_leaf_curl': {
+    cropName: 'Tomato',
+    botanicalName: 'Solanum lycopersicum',
+    diseaseName: 'Tomato Yellow Leaf Curl Virus (TYLCV)',
+    pathogen: 'Begomovirus (Transmitted by Whitefly / Bemisia tabaci)',
+    severity: 'CRITICAL',
+    symptoms: [
+      'Severe upward cupping and curling of leaflet margins',
+      'Interveinal and marginal yellow chlorosis on young leaves',
+      'Marked reduction in leaf size, giving leaves an erect, crumpled appearance',
+      'Severe plant stunting, flower drop, and complete failure to set fruit'
+    ],
+    weatherRiskConditions: {
+      optimalTempMin: 26,
+      optimalTempMax: 36,
+      minHumidity: 55,
+      requiresLeafWetness: false,
+      riskExplanation: 'Warm, dry weather accelerates whitefly population growth and virus transmission.'
+    },
+    treatments: {
+      immediate: 'Rogue out and safely bag all virus-infected plants immediately to remove the virus reservoir.',
+      organic: 'Install yellow sticky cards (15-20 per acre) and apply neem-based insecticidal soaps.',
+      chemical: 'Rotate systemic insecticides targeting whiteflies (e.g. dinotefuran, cyantraniliprole, pyriproxyfen).'
+    },
+    prevention: [
+      'Plant TYLCV-resistant tomato hybrids (e.g. Tygress, Charger, Red Bounty).',
+      'Use 50-mesh insect-proof netting in seedling nursery production.',
+      'Eliminate nightshade weeds and alternate weed hosts around field margins.'
+    ],
+    escalationAdvisory: 'TYLCV cannot be cured once inside the plant. Protect young transplants against whiteflies for the first 40 days.'
+  },
+
+  'tomato_mosaic_virus': {
+    cropName: 'Tomato',
+    botanicalName: 'Solanum lycopersicum',
+    diseaseName: 'Tomato Mosaic Virus (ToMV)',
+    pathogen: 'Tobamovirus (Mechanically Transmitted Virus)',
+    severity: 'CRITICAL',
+    symptoms: [
+      'Mottled light and dark green mosaic patterns on leaflet surfaces',
+      'Distortion, blistering, and "shoestring" narrowing of leaf blades',
+      'Stunting of plant growth with internal brown necrotic browning inside ripe fruit'
+    ],
+    weatherRiskConditions: {
+      optimalTempMin: 20,
+      optimalTempMax: 30,
+      minHumidity: 60,
+      requiresLeafWetness: false,
+      riskExplanation: 'Spreads primarily through physical contact via workers, tools, and contaminated seed.'
+    },
+    treatments: {
+      immediate: 'Carefully remove and burn or deep bury infected plants. Avoid handling healthy plants after touching suspect ones.',
+      organic: 'Wash hands and tools thoroughly with 20% nonfat dry milk or trisodium phosphate (TSP) solution.',
+      chemical: 'No chemical cure exists for viral plant infections. Focus entirely on sanitation and vector exclusion.'
+    },
+    prevention: [
+      'Plant certified virus-free seed or resistant tomato varieties (bearing the "T" or "ToMV" designation).',
+      'Do not use tobacco products around tomato plants as tobacco carries latent tobamoviruses.',
+      'Disinfect trellising stakes, pruning shears, and greenhouse surfaces with 10% bleach.'
+    ],
+    escalationAdvisory: 'ToMV is extremely stable and persists in crop debris and on tools for years. Rigorous sanitation is imperative.'
+  },
+
+  'healthy_apple': {
+    cropName: 'Apple',
+    botanicalName: 'Malus domestica',
+    diseaseName: 'Healthy Apple Foliage (No Disease Detected)',
+    pathogen: 'None (Healthy Botanical Tissue)',
+    severity: 'HEALTHY',
+    symptoms: [
+      'Crisp, dark green foliage with normal serrated margins and intact cuticle',
+      'No signs of fungal scab lesions, cedar rust spots, or black rot pycnidia',
+      'Uniform leaf growth and vigorous spur development'
+    ],
+    weatherRiskConditions: {
+      optimalTempMin: 15,
+      optimalTempMax: 26,
+      minHumidity: 55,
+      requiresLeafWetness: false,
+      riskExplanation: 'Current environmental conditions support active photosynthesis and healthy carbohydrate translocation.'
+    },
+    treatments: {
+      immediate: 'No intervention required. Continue standard orchard nutrition and monitoring schedule.',
+      organic: 'Maintain balanced micronutrient foliar sprays (boron, zinc) as dictated by leaf tissue tests.',
+      chemical: 'Avoid unwarranted protective fungicide applications.'
+    },
+    prevention: [
+      'Continue standard pruning to preserve open canopy architecture.',
+      'Scout orchard weekly for early signs of scab or cedar rust during rainy spells.',
+      'Maintain clean orchard floor under the drip line.'
+    ],
+    escalationAdvisory: 'Canopy is healthy and productive. Rescan if foliar spotting develops after heavy spring rain.'
+  },
+
+  'healthy_blueberry': {
+    cropName: 'Blueberry',
+    botanicalName: 'Vaccinium corymbosum',
+    diseaseName: 'Healthy Blueberry Foliage (No Disease Detected)',
+    pathogen: 'None (Healthy Botanical Tissue)',
+    severity: 'HEALTHY',
+    symptoms: [
+      'Glossy, vibrant green leaves with smooth margins and normal vascular venation',
+      'Absence of rust pustules, mummy berry leaf blights, or anthracnose leaf spotting',
+      'Vigorous new cane growth and healthy lateral shoot development'
+    ],
+    weatherRiskConditions: {
+      optimalTempMin: 16,
+      optimalTempMax: 26,
+      minHumidity: 55,
+      requiresLeafWetness: false,
+      riskExplanation: 'Favorable growing conditions for optimal berry sizing and canopy health.'
+    },
+    treatments: {
+      immediate: 'No treatment required. Maintain soil pH between 4.5 and 5.2.',
+      organic: 'Maintain pine bark or acid peat mulch around the root zone.',
+      chemical: 'No chemical intervention required.'
+    },
+    prevention: [
+      'Ensure soil pH remains in the optimal 4.5-5.2 acidic range.',
+      'Maintain regular drip irrigation during berry swelling.',
+      'Prune old canes annually to maintain active productive wood.'
+    ],
+    escalationAdvisory: 'Specimen foliage is in excellent health.'
+  },
+
+  'healthy_cherry': {
+    cropName: 'Cherry',
+    botanicalName: 'Prunus avium',
+    diseaseName: 'Healthy Cherry Foliage (No Disease Detected)',
+    pathogen: 'None (Healthy Botanical Tissue)',
+    severity: 'HEALTHY',
+    symptoms: [
+      'Deep green, elongated ovate leaves with sharp serrations and clean surfaces',
+      'No powdery white mildew patches, leaf spot shot-holes, or necrotic margins',
+      'Vigorous terminal shoot growth and strong fruit spur clusters'
+    ],
+    weatherRiskConditions: {
+      optimalTempMin: 16,
+      optimalTempMax: 26,
+      minHumidity: 50,
+      requiresLeafWetness: false,
+      riskExplanation: 'Microclimate supports healthy canopy transpiration and fruit spur development.'
+    },
+    treatments: {
+      immediate: 'No intervention required. Maintain standard irrigation and tree nutrition.',
+      organic: 'Apply composted organic matter around tree drip line in autumn.',
+      chemical: 'No fungicides required.'
+    },
+    prevention: [
+      'Prune canopy in late summer to reduce bacterial canker risk.',
+      'Monitor water shoots and young foliage during humid weather.',
+      'Maintain balanced soil fertility.'
+    ],
+    escalationAdvisory: 'Canopy is vigorous and healthy.'
+  },
+
+  'healthy_corn': {
+    cropName: 'Corn / Maize',
+    botanicalName: 'Zea mays',
+    diseaseName: 'Healthy Corn Foliage (No Disease Detected)',
+    pathogen: 'None (Healthy Botanical Tissue)',
+    severity: 'HEALTHY',
+    symptoms: [
+      'Long, arching dark green leaves with strong central midribs and intact margins',
+      'No circular or rectangular lesions, rust pustules, or chlorotic streaks',
+      'Uniform chlorophyll distribution indicating balanced nitrogen uptake'
+    ],
+    weatherRiskConditions: {
+      optimalTempMin: 20,
+      optimalTempMax: 30,
+      minHumidity: 50,
+      requiresLeafWetness: false,
+      riskExplanation: 'Optimal solar radiation and atmospheric temperature for C4 photosynthetic carbon assimilation.'
+    },
+    treatments: {
+      immediate: 'No intervention required. Continue routine field scouting.',
+      organic: 'Maintain soil organic matter and balanced biological foliar nutrition.',
+      chemical: 'No chemical applications required.'
+    },
+    prevention: [
+      'Apply nitrogen in split applications aligned with crop uptake stages (V4-V8).',
+      'Scout lower leaves after extended overcast or high humidity events.',
+      'Ensure proper plant population density to balance canopy airflow.'
+    ],
+    escalationAdvisory: 'Foliage is healthy and vegetative development is on schedule.'
+  },
+
+  'healthy_grape': {
+    cropName: 'Grape',
+    botanicalName: 'Vitis vinifera',
+    diseaseName: 'Healthy Grape Foliage (No Disease Detected)',
+    pathogen: 'None (Healthy Botanical Tissue)',
+    severity: 'HEALTHY',
+    symptoms: [
+      'Vibrant green, lobed leaf blades with crisp margins and prominent veins',
+      'No powdery mildew webbing, black rot lesions, downy mildew oil spots, or esca stripes',
+      'Balanced shoot growth with healthy tendrils and uniform leaf canopy'
+    ],
+    weatherRiskConditions: {
+      optimalTempMin: 18,
+      optimalTempMax: 30,
+      minHumidity: 50,
+      requiresLeafWetness: false,
+      riskExplanation: 'Atmospheric conditions favor balanced vine transpiration and sugar accumulation in clusters.'
+    },
+    treatments: {
+      immediate: 'No chemical treatment needed. Continue canopy maintenance.',
+      organic: 'Maintain cover crops between rows to build soil health.',
+      chemical: 'No chemical intervention required.'
+    },
+    prevention: [
+      'Perform regular shoot tucking and selective leaf pulling around fruit zones.',
+      'Maintain clean vineyard floor under vine rows.',
+      'Scout interior shaded leaves for early signs of fungal sporulation.'
+    ],
+    escalationAdvisory: 'Vine foliage is healthy and functional.'
+  },
+
+  'healthy_peach': {
+    cropName: 'Peach',
+    botanicalName: 'Prunus persica',
+    diseaseName: 'Healthy Peach Foliage (No Disease Detected)',
+    pathogen: 'None (Healthy Botanical Tissue)',
+    severity: 'HEALTHY',
+    symptoms: [
+      'Glossy lanceolate green leaves without bacterial spot perforations or leaf curl distortion',
+      'Clean petioles and unblemished shoot bark',
+      'Active shoot elongation and healthy fruit bud set'
+    ],
+    weatherRiskConditions: {
+      optimalTempMin: 18,
+      optimalTempMax: 28,
+      minHumidity: 50,
+      requiresLeafWetness: false,
+      riskExplanation: 'Favorable orchard microclimate supports healthy fruit sizing and vegetative vigor.'
+    },
+    treatments: {
+      immediate: 'No treatment required. Continue planned irrigation and nutrient management.',
+      organic: 'Apply balanced organic compost to root zone.',
+      chemical: 'No chemical applications needed.'
+    },
+    prevention: [
+      'Prune in open-center vase system for maximum sunlight and rapid foliage drying.',
+      'Apply dormant copper sprays before bud swell to prevent peach leaf curl.',
+      'Scout orchard leaves after spring storm events.'
+    ],
+    escalationAdvisory: 'Peach foliage is vigorous and healthy.'
+  },
+
+  'healthy_bell_pepper': {
+    cropName: 'Bell Pepper',
+    botanicalName: 'Capsicum annuum',
+    diseaseName: 'Healthy Bell Pepper Foliage (No Disease Detected)',
+    pathogen: 'None (Healthy Botanical Tissue)',
+    severity: 'HEALTHY',
+    symptoms: [
+      'Smooth, dark green elliptical leaves with intact margins and firm turgor',
+      'No water-soaked spots, bacterial scabs, mosaic mottling, or powdery mildew',
+      'Sturdy stems and vigorous flowering and fruit set'
+    ],
+    weatherRiskConditions: {
+      optimalTempMin: 20,
+      optimalTempMax: 30,
+      minHumidity: 55,
+      requiresLeafWetness: false,
+      riskExplanation: 'Warm sunny weather promotes active photosynthesis and uniform fruit development.'
+    },
+    treatments: {
+      immediate: 'No intervention required. Maintain consistent drip irrigation.',
+      organic: 'Apply calcium foliar supplements to prevent blossom end rot in developing fruit.',
+      chemical: 'No pesticides required.'
+    },
+    prevention: [
+      'Use drip irrigation to prevent soil splash onto lower foliage.',
+      'Maintain balanced calcium and magnesium fertility.',
+      'Scout for aphids and thrips to prevent virus introduction.'
+    ],
+    escalationAdvisory: 'Foliage is healthy and growing vigorously.'
+  },
+
+  'healthy_potato': {
+    cropName: 'Potato',
+    botanicalName: 'Solanum tuberosum',
+    diseaseName: 'Healthy Potato Foliage (No Disease Detected)',
+    pathogen: 'None (Healthy Botanical Tissue)',
+    severity: 'HEALTHY',
+    symptoms: [
+      'Compound pinnate leaves with vibrant green leaflets and clean interveinal tissue',
+      'No water-soaked late blight patches or concentric early blight target rings',
+      'Vigorous haulm growth supporting optimal subterranean tuber bulking'
+    ],
+    weatherRiskConditions: {
+      optimalTempMin: 16,
+      optimalTempMax: 24,
+      minHumidity: 55,
+      requiresLeafWetness: false,
+      riskExplanation: 'Cool to moderate temperatures favor balanced haulm development and efficient tuber bulking.'
+    },
+    treatments: {
+      immediate: 'No intervention required. Continue routine scouting schedule.',
+      organic: 'Apply balanced organic fertilizer during early tuber initiation.',
+      chemical: 'No fungicides required.'
+    },
+    prevention: [
+      'Hill rows adequately to protect tubers from light and spore wash-in.',
+      'Irrigate early in the morning so foliage dries before nightfall.',
+      'Maintain 3-4 year rotation away from solanaceous crops.'
+    ],
+    escalationAdvisory: 'Potato canopy is intact and healthy.'
+  },
+
+  'healthy_raspberry': {
+    cropName: 'Raspberry',
+    botanicalName: 'Rubus idaeus',
+    diseaseName: 'Healthy Raspberry Foliage (No Disease Detected)',
+    pathogen: 'None (Healthy Botanical Tissue)',
+    severity: 'HEALTHY',
+    symptoms: [
+      'Pinnately compound green leaves with whitish undersides and serrated margins',
+      'No spur blight lesions, anthracnose spots, or rust pustules',
+      'Strong primocane growth and healthy floricane fruiting laterals'
+    ],
+    weatherRiskConditions: {
+      optimalTempMin: 16,
+      optimalTempMax: 24,
+      minHumidity: 55,
+      requiresLeafWetness: false,
+      riskExplanation: 'Favorable microclimate for cane growth and berry production.'
+    },
+    treatments: {
+      immediate: 'No intervention required. Ensure adequate mulch and soil moisture.',
+      organic: 'Top-dress with composted manure in early spring.',
+      chemical: 'No fungicides required.'
+    },
+    prevention: [
+      'Prune out spent floricanes immediately after summer harvest.',
+      'Trellis canes to maintain an open canopy with good air movement.',
+      'Avoid overhead irrigation.'
+    ],
+    escalationAdvisory: 'Raspberry canes are healthy and vigorous.'
+  },
+
+  'healthy_soybean': {
+    cropName: 'Soybean',
+    botanicalName: 'Glycine max',
+    diseaseName: 'Healthy Soybean Foliage (No Disease Detected)',
+    pathogen: 'None (Healthy Botanical Tissue)',
+    severity: 'HEALTHY',
+    symptoms: [
+      'Trifoliolate green leaves with uniform coloration and smooth leaflet surfaces',
+      'No frog-eye leaf spots, brown spot lesions, or Asian soybean rust pustules',
+      'Active nodulation and healthy pod cluster development'
+    ],
+    weatherRiskConditions: {
+      optimalTempMin: 20,
+      optimalTempMax: 30,
+      minHumidity: 50,
+      requiresLeafWetness: false,
+      riskExplanation: 'Optimal conditions for symbiotic nitrogen fixation and photosynthetic pod filling.'
+    },
+    treatments: {
+      immediate: 'No intervention required. Continue standard field scouting.',
+      organic: 'Maintain soil organic matter and beneficial rhizobia inoculants.',
+      chemical: 'No chemical applications required.'
+    },
+    prevention: [
+      'Practice crop rotation with corn or small grains.',
+      'Select disease-resistant soybean varieties adapted to your maturity group.',
+      'Scout lower canopy foliage at R1-R3 reproductive stages.'
+    ],
+    escalationAdvisory: 'Soybean canopy is healthy and pod development is on schedule.'
+  },
+
+  'healthy_strawberry': {
+    cropName: 'Strawberry',
+    botanicalName: 'Fragaria × ananassa',
+    diseaseName: 'Healthy Strawberry Foliage (No Disease Detected)',
+    pathogen: 'None (Healthy Botanical Tissue)',
+    severity: 'HEALTHY',
+    symptoms: [
+      'Trifoliate dark green leaves with serrated margins and robust petioles',
+      'No purple leaf scorch spots, leaf blight necrosis, or powdery mildew curl',
+      'Healthy crowns producing active flower trusses and vigorous runners'
+    ],
+    weatherRiskConditions: {
+      optimalTempMin: 16,
+      optimalTempMax: 25,
+      minHumidity: 55,
+      requiresLeafWetness: false,
+      riskExplanation: 'Current environmental conditions support crown health and active berry sizing.'
+    },
+    treatments: {
+      immediate: 'No chemical treatment needed. Maintain consistent drip irrigation.',
+      organic: 'Maintain clean straw or plastic mulch beneath leaves to prevent soil contact.',
+      chemical: 'No chemical sprays required.'
+    },
+    prevention: [
+      'Maintain plant spacing to allow rapid canopy drying after morning dew.',
+      'Renovate beds promptly after harvest by mowing old foliage.',
+      'Remove dead or senescing leaves during routine weeding.'
+    ],
+    escalationAdvisory: 'Strawberry foliage is in prime physiological condition.'
+  },
+
+  'healthy_tomato': {
+    cropName: 'Tomato',
+    botanicalName: 'Solanum lycopersicum',
+    diseaseName: 'Healthy Tomato Plant (No Disease Detected)',
+    pathogen: 'None (Intact Cellular Tissue)',
+    severity: 'HEALTHY',
+    symptoms: [
+      'Vibrant chlorophyll green compound leaves with crisp, uncurled margins',
+      'Absence of early blight concentric rings, late blight water-soaked patches, or bacterial spots',
+      'Strong turgid stems with active vegetative and floral development'
+    ],
+    weatherRiskConditions: {
+      optimalTempMin: 18,
+      optimalTempMax: 28,
+      minHumidity: 55,
+      requiresLeafWetness: false,
+      riskExplanation: 'Atmospheric conditions provide balanced transpiration and optimal photosynthesis.'
+    },
+    treatments: {
+      immediate: 'No intervention required. Continue scheduled drip irrigation and trellising.',
+      organic: 'Apply seaweed extract or bio-stimulants to sustain natural plant immune defenses.',
+      chemical: 'No fungicides required.'
+    },
+    prevention: [
+      'Keep lower leaves pruned 25-30 cm above soil level to prevent splash-borne fungal spores.',
+      'Maintain consistent watering to avoid calcium deficiency (blossom end rot).',
+      'Scout underside of leaves weekly for early signs of pests or disease.'
+    ],
+    escalationAdvisory: 'Foliage appears vigorous and disease-free. Rescan if you observe any spotting or wilting.'
+  },
+
   'healthy_leaf': {
     cropName: 'Field Crop / Vegetable',
     botanicalName: 'Vascular Plant (Angiosperm)',
@@ -704,14 +1484,14 @@ export const SAMPLE_PLANT_IMAGES = [
     sampleData: 'healthy_leaf'
   },
   {
-    id: 'sample-rice-blast',
-    name: 'Rice Leaf — Blast Lesions',
-    crop: 'Rice',
-    expectedCondition: 'Rice Blast',
+    id: 'sample-pepper-bacterial-spot',
+    name: 'Pepper Leaf — Bacterial Spot',
+    crop: 'Bell Pepper',
+    expectedCondition: 'Bacterial Spot',
     url: getAssetUrl('samples/rice-blast.jpg'),
     fallbackUrl: 'https://images.unsplash.com/photo-1536657464919-892534f60d6e?auto=format&fit=crop&w=800&q=80',
-    description: 'Spindle-shaped elliptical lesions with gray necrotic centers.',
-    sampleData: 'rice_blast'
+    description: 'Small angular necrotic lesions with yellow haloing on pepper foliage.',
+    sampleData: 'pepper_bacterial_spot'
   },
   {
     id: 'sample-apple-scab',
@@ -776,53 +1556,111 @@ function assessLaplacianClarity(imageData, width, height) {
 }
 
 /**
+ * Check if the AgriSense Local Computer Vision Backend is operational
+ */
+export async function checkCvBackendHealth() {
+  try {
+    const res = await fetch(`${CV_BACKEND_URL}/api/health`, { signal: AbortSignal.timeout(2000) });
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (err) {
+    // Backend offline
+  }
+  return null;
+}
+
+/**
+ * Real-Time Plant Leaf Object Detection using YOLOv8 via Computer Vision Backend
+ */
+export async function detectPlantLeaves(imageSource) {
+  try {
+    const formData = new FormData();
+    if (typeof imageSource === 'string' && imageSource.startsWith('data:')) {
+      formData.append('image', imageSource);
+    } else {
+      const blob = await fetch(imageSource).then(r => r.blob());
+      formData.append('file', blob, 'frame.jpg');
+    }
+
+    const res = await fetch(`${CV_BACKEND_URL}/api/detect`, {
+      method: 'POST',
+      body: formData,
+      signal: AbortSignal.timeout(4000)
+    });
+
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (err) {
+    console.debug('AgriSense: Live YOLO frame detection request error/timeout:', err);
+  }
+  return { success: false, detections: [], leaf_count: 0, has_leaves: false, has_person: false };
+}
+
+/**
  * Perform Deep Computer-Vision Pathology Analysis on a Plant Image
- * Handles:
- * - Clarity and focus assessment
- * - Plant foliage segmentation (Excess Green Index ExG & HSV color space)
- * - Remote API inference (if configured)
- * - In-browser neural feature-classifier execution
- * - Hotspot lesion localization
+ * First runs real YOLO leaf detection and MobileNetV2 disease classification via FastAPI CV Backend.
+ * Falls back to client-side feature classifier if backend is starting or offline.
  */
 export async function analyzePlantImage(imageSource, sampleHint = null, options = {}) {
   const forceAnalysis = Boolean(options?.forceAnalysis);
 
-  // If sample hint is explicitly supplied from verified sample library
-  if (sampleHint && CROP_DISEASE_DATABASE[sampleHint]) {
-    const diseaseInfo = CROP_DISEASE_DATABASE[sampleHint];
-    const isHealthy = sampleHint === 'healthy_leaf';
-    return {
-      success: true,
-      isPlant: true,
-      matchedKey: sampleHint,
-      diseaseInfo,
-      confidence: isHealthy ? 96 : Math.round(92 + Math.random() * 5),
-      isLowConfidence: false,
-      clarityWarning: null,
-      metrics: {
-        chlorophyllCoverage: isHealthy ? 92 : 68,
-        necroticLesionArea: isHealthy ? 0 : 21,
-        chlorosisYellowing: isHealthy ? 4 : 15
-      },
-      hotspots: isHealthy ? [] : [
-        { id: 'lesion-1', x: 28, y: 35, width: 22, height: 22, label: 'Primary Pathogen Lesion' },
-        { id: 'lesion-2', x: 55, y: 48, width: 18, height: 18, label: 'Secondary Necrotic Spotting' }
-      ],
-      modelProvider: MODEL_CONFIG.activeEngineName,
-      analyzedAt: new Date().toISOString()
-    };
-  }
-
-  // 1. Attempt Remote Model API if configured
-  if (MODEL_CONFIG.apiUrl) {
-    try {
-      const remoteResult = await queryRemoteModelApi(imageSource, MODEL_CONFIG.apiUrl);
-      if (remoteResult && remoteResult.success) {
-        return remoteResult;
-      }
-    } catch (apiErr) {
-      console.warn('AgriSense: Remote model API request failed, falling back to on-device agro-vision model:', apiErr);
+  // 1. Query Real Computer Vision Backend (YOLOv8 + MobileNetV2 FastAPI microservice)
+  try {
+    const formData = new FormData();
+    if (typeof imageSource === 'string' && imageSource.startsWith('data:')) {
+      formData.append('image', imageSource);
+    } else {
+      const blob = await fetch(imageSource).then(r => r.blob());
+      formData.append('file', blob, 'leaf_specimen.jpg');
     }
+
+    const res = await fetch(`${CV_BACKEND_URL}/api/classify`, {
+      method: 'POST',
+      body: formData,
+      signal: AbortSignal.timeout(12000)
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success) {
+        const matchedKey = data.matchedKey || (sampleHint && CROP_DISEASE_DATABASE[sampleHint] ? sampleHint : 'healthy_leaf');
+        const diseaseInfo = CROP_DISEASE_DATABASE[matchedKey] || CROP_DISEASE_DATABASE['healthy_leaf'];
+        return {
+          success: true,
+          isPlant: data.is_plant,
+          hasLeafDetection: Boolean(data.has_leaf_detection),
+          isHealthy: Boolean(data.is_healthy),
+          isUncertain: data.is_uncertain,
+          clarityWarning: data.clarity_warning,
+          matchedKey,
+          rawClass: data.raw_class,
+          detectedPlant: data.detected_plant,
+          diseaseInfo,
+          confidence: Math.round(data.confidence),
+          confidenceRatio: data.confidence_ratio,
+          topPredictions: data.top_predictions || [],
+          detections: data.detections || [],
+          croppedLeaf: data.cropped_leaf_base64 || null,
+          cropBox: data.crop_box || null,
+          metrics: data.metrics || { chlorophyllCoverage: 75, necroticLesionArea: 15, chlorosisYellowing: 10 },
+          hotspots: data.hotspots || [],
+          modelProvider: data.modelProvider || MODEL_CONFIG.activeEngineName,
+          analyzedAt: data.analyzedAt || new Date().toISOString()
+        };
+      } else if (data.is_uncertain || data.error || data.errorType) {
+        if (!forceAnalysis) {
+          return {
+            success: false,
+            errorType: data.errorType || 'uncertain_prediction',
+            error: data.clarity_warning || data.error || 'The computer vision model could not identify a valid leaf or disease. Please aim camera at an agricultural leaf.'
+          };
+        }
+      }
+    }
+  } catch (backendErr) {
+    console.warn('AgriSense: Computer vision microservice request failed, falling back to on-device engine:', backendErr);
   }
 
   // 2. Client-Side Agro-Vision Deep Inference Engine

@@ -10,8 +10,10 @@
     "weatherForecast": "Weather Forecast",
     "plantHealth": "Plant Health",
     "cropPlanning": "Crop Planning & Mandi Prices",
+    "animalRepellent": "Animal Sound AI",
     "leafDisease": "Leaf Disease Detection",
     "farmInsights": "Farm Insights",
+
     "voiceAssistant": "Voice Assistant",
     "platformModules": "Platform Modules",
     "settings": "Preferences & Data Sources",
@@ -326,5 +328,23 @@
     "copyright": "AgriSense Platform. Built for precision agricultural stewardship.",
     "systemSettings": "System Settings & Units",
     "hardwareRoadmap": "Hardware Roadmap"
+  },
+  "animalRepellent": {
+    "moduleTitle": "Animal Sound Detection & Alerts",
+    "moduleDesc": "Real-time AI acoustic monitoring to protect crops from harmful wildlife while keeping beneficial farm animals safe.",
+    "liveMonitorTitle": "Live Farm Audio Acquisition",
+    "stopListening": "Stop Microphone",
+    "startListening": "Start Microphone",
+    "speciesConfigTitle": "Farmer Species Category Matrix",
+    "controlTitle": "Repellent Guard Safety & Mode Controller",
+    "historyTitle": "Bio-Acoustic Event Audit Log",
+    "soundboardTitle": "1-Click Animal Audio Soundboard",
+    "deviceStatus": "Device Status & Telemetry",
+    "protectionRules": "Animal Protection Rules",
+    "audioAlertControls": "Audio Alert & Safety Controls",
+    "noEventsRecorded": "No animal events recorded yet",
+    "targetAlert": "Target Alert",
+    "protected": "Protected",
+    "uncertain": "Uncertain"
   }
 }

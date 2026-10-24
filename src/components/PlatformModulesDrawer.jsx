@@ -14,11 +14,14 @@ import {
   Server,
   ChevronRight,
   ShieldCheck,
-  Zap
+  Zap,
+  Volume2
 } from 'lucide-react';
 
-export default function PlatformModulesDrawer({ isOpen, onClose }) {
+
+export default function PlatformModulesDrawer({ isOpen, onClose, onNavigateTab }) {
   const [activeModuleTab, setActiveModuleTab] = useState('esp32');
+
   const [simulatedSensorActive, setSimulatedSensorActive] = useState(false);
 
   if (!isOpen) return null;
@@ -37,8 +40,8 @@ export default function PlatformModulesDrawer({ isOpen, onClose }) {
       id: 'esp32',
       number: 'Module 02',
       title: 'IoT Soil & Root-Zone Telemetry (ESP32)',
-      status: 'READY FOR HARDWARE',
-      statusColor: 'bg-blue-100 text-blue-800 border-blue-300',
+      status: 'ACTIVE & INTEGRATED',
+      statusColor: 'bg-emerald-100 text-emerald-800 border-emerald-300',
       icon: Cpu,
       desc: 'In-situ ESP32 microcontroller nodes transmitting capacitive soil moisture, soil temperature, and NPK nutrients over MQTT/HTTP.'
     },
@@ -68,8 +71,18 @@ export default function PlatformModulesDrawer({ isOpen, onClose }) {
       statusColor: 'bg-emerald-100 text-emerald-800 border-emerald-300',
       icon: ScanLine,
       desc: 'Computer-vision leaf pathology analyzer and camera scanner cross-referenced with live atmospheric temperature and humidity.'
+    },
+    {
+      id: 'animal_repellent',
+      number: 'Module 06',
+      title: 'AI Animal Sound Recognition & Farm Repellent',
+      status: 'ACTIVE & INTEGRATED',
+      statusColor: 'bg-emerald-100 text-emerald-800 border-emerald-300',
+      icon: Volume2,
+      desc: 'PyTorch deep neural audio model analyzing 131 bio-acoustic features to identify crop-damaging wildlife while strictly protecting cattle and beneficial birds.'
     }
   ];
+
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
@@ -238,6 +251,18 @@ export default function PlatformModulesDrawer({ isOpen, onClose }) {
                     </p>
                   )}
                 </div>
+
+                <button
+                  onClick={() => {
+                    if (onNavigateTab) onNavigateTab('soil_monitoring');
+                    onClose();
+                  }}
+                  className="w-full flex items-center justify-center space-x-2 py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-800 to-green-800 text-white font-bold text-xs sm:text-sm shadow-md hover:from-emerald-900 hover:to-green-900 transition-all cursor-pointer"
+                >
+                  <Cpu className="w-4 h-4" />
+                  <span>Launch Live Soil Monitoring & Buzzer Dashboard</span>
+                  <ChevronRight className="w-4 h-4 ml-1" />
+                </button>
               </div>
             )}
 
@@ -307,7 +332,6 @@ export default function PlatformModulesDrawer({ isOpen, onClose }) {
                 </div>
               </div>
             )}
-
             {activeModuleTab === 'disease' && (
               <div className="space-y-4">
                 <h3 className="text-lg font-bold text-slate-900">
@@ -322,8 +346,46 @@ export default function PlatformModulesDrawer({ isOpen, onClose }) {
                 </div>
               </div>
             )}
+
+            {activeModuleTab === 'animal_repellent' && (
+              <div className="space-y-4 animate-in fade-in">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-bold text-slate-900">
+                    Module 6: Animal Sound Detection & Alerts
+                  </h3>
+                  <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                    Active & Integrated
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Real-time bio-acoustic monitoring system that identifies crop-damaging wildlife (wild boars, macaques, crows, deer, rodents) using trained PyTorch neural networks and 131 audio features, while strictly exempting beneficial farm animals (cows and sparrows).
+                </p>
+                <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-950 space-y-2">
+                  <span className="font-bold block">Integrated Capabilities:</span>
+                  <ul className="space-y-1 list-disc list-inside text-[11px] text-emerald-900">
+                    <li>131-Dimensional Bio-Acoustic Feature Extraction (MFCCs, Mel-banks, Centroid, ZCR)</li>
+                    <li>Strict Livestock & Bird Protection: Cows and Sparrows are never repelled</li>
+                    <li>2-Sample Persistence Filter: Prevents false alarms from transient noises</li>
+                    <li>60s Protective Cooldown & Safety Gain Clamps (&le;75 dB SPL)</li>
+                    <li>ESP32 I2S Digital Audio Sampling & Web Audio Oscilloscope Visualizer</li>
+                  </ul>
+                </div>
+                <button
+                  onClick={() => {
+                    if (onNavigateTab) onNavigateTab('animal_repellent');
+                    onClose();
+                  }}
+                  className="w-full flex items-center justify-center space-x-2 py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-800 to-green-800 text-white font-bold text-xs sm:text-sm shadow-md hover:from-emerald-900 hover:to-green-900 transition-all cursor-pointer"
+                >
+                  <Volume2 className="w-4 h-4" />
+                  <span>Launch Animal Sound Detection & Alerts</span>
+                  <ChevronRight className="w-4 h-4 ml-1" />
+                </button>
+              </div>
+            )}
           </div>
         </div>
+
 
         {/* Drawer Footer */}
         <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500">

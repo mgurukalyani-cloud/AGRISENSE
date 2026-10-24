@@ -123,10 +123,23 @@ export default function Header({
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 sm:h-20">
           {/* Logo & Platform Title */}
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gradient-to-br from-emerald-700 to-green-600 flex items-center justify-center text-white shadow-md shadow-emerald-700/20">
+          <div className="flex items-center space-x-2.5 sm:space-x-3">
+            {/* KLH Farms Logo */}
+            <div className="flex items-center bg-white p-0.5 rounded-full shadow-xs border border-emerald-900/10 shrink-0 overflow-hidden ring-2 ring-emerald-500/20">
+              <img
+                src={`${import.meta.env.BASE_URL}klh-farms-logo.png`}
+                alt="KLH Farms Logo"
+                className="h-11 sm:h-13 w-11 sm:w-13 object-cover rounded-full"
+                onError={(e) => {
+                  e.currentTarget.src = '/klh-farms-logo.png';
+                }}
+              />
+            </div>
+
+            <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gradient-to-br from-emerald-700 to-green-600 flex items-center justify-center text-white shadow-md shadow-emerald-700/20 shrink-0">
               <Sprout className="w-6 h-6" />
             </div>
+
             <div>
               <div className="flex items-center space-x-2">
                 <span className="text-xl sm:text-2xl font-bold tracking-tight text-emerald-950">

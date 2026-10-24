@@ -10,7 +10,9 @@ import {
   LayoutDashboard,
   Sparkles,
   Mic,
-  Sprout
+  Sprout,
+  Volume2,
+  Cpu
 } from 'lucide-react';
 
 export default function NavigationTabs({ activeTab, onChangeTab, advisorScore = 85 }) {
@@ -60,6 +62,13 @@ export default function NavigationTabs({ activeTab, onChangeTab, advisorScore = 
       badge: 'Market AI'
     },
     {
+      id: 'animal_repellent',
+      label: t('app.animalRepellent', 'Animal Sound Detection & Alerts'),
+      sublabel: 'Bio-Acoustic Defense',
+      icon: Volume2,
+      badge: 'Bio-AI'
+    },
+    {
       id: 'farm_insights',
       label: t('app.farmInsights', 'Farm Insights'),
       sublabel: 'Agronomic Advisor',
@@ -77,7 +86,7 @@ export default function NavigationTabs({ activeTab, onChangeTab, advisorScore = 
 
   return (
     <div className="w-full bg-white/90 backdrop-blur-md rounded-2xl p-1.5 sm:p-2 border border-emerald-900/10 shadow-xs">
-      <nav className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 xl:grid-cols-8 gap-1.5 sm:gap-2" aria-label="Smart Agriculture Navigation Tabs">
+      <nav className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 xl:grid-cols-9 gap-1.5 sm:gap-2" aria-label="Smart Agriculture Navigation Tabs">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -87,10 +96,10 @@ export default function NavigationTabs({ activeTab, onChangeTab, advisorScore = 
               key={tab.id}
               data-tab-id={tab.id}
               onClick={() => onChangeTab(tab.id)}
-              className={`relative flex items-center justify-between p-2.5 sm:p-3 rounded-xl transition-all duration-200 cursor-pointer ${
+              className={`relative flex items-center justify-between p-2.5 sm:p-3 rounded-xl min-h-[58px] h-full transition-all duration-200 cursor-pointer ${
                 isActive
                   ? 'bg-gradient-to-r from-emerald-800 to-green-800 text-white shadow-md shadow-emerald-900/20 ring-1 ring-emerald-500/30'
-                  : 'bg-transparent hover:bg-emerald-50/60 text-slate-700 hover:text-emerald-950'
+                  : 'bg-transparent hover:bg-emerald-50/60 text-slate-700 hover:text-emerald-950 border border-transparent hover:border-emerald-200/50'
               }`}
             >
               <div className="flex items-center space-x-2 truncate min-w-0">

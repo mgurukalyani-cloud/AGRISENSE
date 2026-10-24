@@ -20,7 +20,10 @@ import {
   Radio,
   TrendingUp,
   Coins,
-  Scale
+  Scale,
+  Send,
+  MessageSquare,
+  Trash2
 } from 'lucide-react';
 import { INDIAN_LANGUAGES, getLanguageByCode } from '../../i18n/languages';
 import { voiceAssistantService } from '../../services/voiceAssistantService';
@@ -49,6 +52,11 @@ export default function VoiceFarmingAssistant({
   const [interimTranscript, setInterimTranscript] = useState('');
   const [answerData, setAnswerData] = useState(null);
   const [errorMessage, setErrorMessage] = useState(null);
+  const [lastFailedQuestion, setLastFailedQuestion] = useState(null);
+
+  // Conversation history for multi-turn questions & follow-ups
+  const [conversationHistory, setConversationHistory] = useState([]);
+  const [textInput, setTextInput] = useState('');
 
   // Audio speech rate: 0.95 (normal) vs 0.80 (slower for rural/elderly farmers)
   const [speechSpeed, setSpeechSpeed] = useState(0.95);
@@ -98,55 +106,84 @@ export default function VoiceFarmingAssistant({
     };
   }, []);
 
-  // Answer generation and automatic text-to-speech
-  const processQuestion = useCallback((questionText) => {
-    if (!questionText || questionText.trim() === '') return;
+  // Answer generation via AI Assistant Backend and automatic text-to-speech
+  const processQuestion = useCallback(
+    async (questionText, isRetry = false) => {
+      if (!questionText || questionText.trim() === '') return;
 
-    setAssistantState('processing');
-    setErrorMessage(null);
+      const trimmedQ = questionText.trim();
+      setAssistantState('processing');
+      setErrorMessage(null);
+      setRecognizedQuestion(trimmedQ);
 
-    // Context-aware answer synthesis
-    const answer = voiceAssistantService.generateAnswer({
-      query: questionText,
-      langCode: selectedLang,
-      currentWeather,
-      dailyWeather,
-      historicalWeather,
-      farmTelemetry: telemetry,
-      plantHealthResult,
-      location
-    });
+      try {
+        const res = await voiceAssistantService.askAssistant({
+          query: trimmedQ,
+          conversationHistory,
+          langCode: selectedLang,
+          currentWeather,
+          dailyWeather,
+          historicalWeather,
+          farmTelemetry: telemetry,
+          plantHealthResult,
+          location
+        });
 
-    if (!isMountedRef.current) return;
+        if (!isMountedRef.current) return;
 
-    setAnswerData(answer);
-    setAssistantState('speaking');
-    setIsSpeakingActive(true);
-
-    // Speak aloud using TTS
-    voiceAssistantService.speakText({
-      text: answer.speechText,
-      langCode: selectedLang,
-      speed: speechSpeed,
-      onStart: () => {
-        if (isMountedRef.current) {
-          setIsSpeakingActive(true);
+        if (!res.success) {
+          setAssistantState('error');
+          setErrorMessage(res.message || 'AI Assistant service unavailable. Please retry.');
+          setLastFailedQuestion(trimmedQ);
+          return;
         }
-      },
-      onEnd: () => {
+
+        setAnswerData(res);
+        setErrorMessage(null);
+        setLastFailedQuestion(null);
+        setAssistantState('speaking');
+        setIsSpeakingActive(true);
+
+        // Append to conversation history for multi-turn context
+        setConversationHistory((prev) => [
+          ...prev,
+          { role: 'user', content: trimmedQ },
+          { role: 'assistant', content: res.speechText || res.answer || '' }
+        ]);
+
+        // Speak aloud using TTS
+        voiceAssistantService.speakText({
+          text: res.speechText || res.answer,
+          langCode: selectedLang,
+          speed: speechSpeed,
+          onStart: () => {
+            if (isMountedRef.current) {
+              setIsSpeakingActive(true);
+            }
+          },
+          onEnd: () => {
+            if (isMountedRef.current) {
+              setIsSpeakingActive(false);
+              setAssistantState('idle');
+            }
+          },
+          onError: () => {
+            if (isMountedRef.current) {
+              setIsSpeakingActive(false);
+              setAssistantState('idle');
+            }
+          }
+        });
+      } catch (err) {
         if (isMountedRef.current) {
-          setIsSpeakingActive(false);
-          setAssistantState('idle');
-        }
-      },
-      onError: () => {
-        if (isMountedRef.current) {
-          setIsSpeakingActive(false);
-          setAssistantState('idle');
+          setAssistantState('error');
+          setErrorMessage(err.message || 'An unexpected error occurred while communicating with the AI assistant.');
+          setLastFailedQuestion(trimmedQ);
         }
       }
-    });
-  }, [currentWeather, dailyWeather, historicalWeather, location, plantHealthResult, selectedLang, speechSpeed, telemetry]);
+    },
+    [conversationHistory, currentWeather, dailyWeather, historicalWeather, location, plantHealthResult, selectedLang, speechSpeed, telemetry]
+  );
 
   // Start Voice Listening (STT)
   const handleStartListening = () => {
@@ -259,6 +296,19 @@ export default function VoiceFarmingAssistant({
     setAnswerData(null);
     setAssistantState('idle');
     setErrorMessage(null);
+  };
+
+  // Reset full conversation and state
+  const handleResetConversation = () => {
+    voiceAssistantService.stopSpeaking();
+    setIsSpeakingActive(false);
+    setRecognizedQuestion('');
+    setInterimTranscript('');
+    setAnswerData(null);
+    setConversationHistory([]);
+    setAssistantState('idle');
+    setErrorMessage(null);
+    setLastFailedQuestion(null);
   };
 
   // Quick question pills in current selected language
@@ -517,13 +567,90 @@ export default function VoiceFarmingAssistant({
                   </>
                 )}
                 {assistantState === 'idle' && (
-                  <span>{t('voice.idlePrompt', 'Tap microphone above or select a common question below')}</span>
+                  <span>{t('voice.idlePrompt', 'Tap microphone above, type your question, or select a prompt below')}</span>
                 )}
                 {assistantState === 'error' && (
-                  <span className="text-rose-700">{errorMessage || 'Error occurred.'}</span>
+                  <span className="text-rose-700 font-bold">Error encountered. See details below.</span>
                 )}
               </div>
             </div>
+          </div>
+
+          {/* Honest Error Banner with Retry Question Button */}
+          {errorMessage && (
+            <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in duration-200 shadow-sm">
+              <div className="flex items-start space-x-2.5">
+                <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                <div className="space-y-0.5">
+                  <strong className="text-xs font-bold block text-rose-800 uppercase tracking-wider">
+                    AI Assistant Notice
+                  </strong>
+                  <p className="text-xs text-rose-700 leading-relaxed">
+                    {errorMessage}
+                  </p>
+                </div>
+              </div>
+              {lastFailedQuestion && (
+                <button
+                  onClick={() => processQuestion(lastFailedQuestion, true)}
+                  className="px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-colors cursor-pointer flex items-center justify-center space-x-1.5 shrink-0 shadow-sm"
+                  title="Retry asking this question"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Retry Question</span>
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Text Input Form for Direct Typing in Any Language */}
+          <div className="space-y-2">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (textInput.trim() && assistantState !== 'processing') {
+                  processQuestion(textInput.trim());
+                  setTextInput('');
+                }
+              }}
+              className="flex items-center gap-2 max-w-3xl mx-auto w-full"
+            >
+              <div className="relative flex-1">
+                <input
+                  type="text"
+                  value={textInput}
+                  onChange={(e) => setTextInput(e.target.value)}
+                  placeholder={`Ask or type in ${currentLangMeta.nativeName} or English (e.g., "Why are tomato leaves turning yellow?")...`}
+                  disabled={assistantState === 'processing'}
+                  className="w-full px-4 py-3 pl-10 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white focus:outline-hidden text-sm text-slate-800 placeholder-slate-400 transition-colors shadow-inner"
+                />
+                <MessageSquare className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              </div>
+              <button
+                type="submit"
+                disabled={!textInput.trim() || assistantState === 'processing'}
+                className="px-5 py-3 rounded-2xl bg-emerald-700 hover:bg-emerald-800 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-bold flex items-center space-x-1.5 transition-all shadow-md shadow-emerald-900/20 cursor-pointer shrink-0"
+              >
+                <span>Send</span>
+                <Send className="w-4 h-4" />
+              </button>
+            </form>
+
+            {conversationHistory.length > 0 && (
+              <div className="flex items-center justify-between text-[11px] text-slate-500 px-2">
+                <span>
+                  Active Conversation: {Math.floor(conversationHistory.length / 2)} turn{conversationHistory.length > 2 ? 's' : ''} (context preserved for follow-ups)
+                </span>
+                <button
+                  onClick={handleResetConversation}
+                  className="text-slate-400 hover:text-rose-600 transition-colors flex items-center space-x-1 cursor-pointer"
+                  title="Clear conversation history and start fresh"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  <span>Clear Conversation</span>
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Real-time speech transcript feedback */}
@@ -542,13 +669,20 @@ export default function VoiceFarmingAssistant({
           {answerData && (
             <div className="rounded-3xl bg-slate-900 text-white p-5 sm:p-7 space-y-5 shadow-xl border border-emerald-900/40 animate-in zoom-in-95 duration-200">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center space-x-2.5">
                   <div className="w-7 h-7 rounded-xl bg-emerald-600 flex items-center justify-center text-white shrink-0">
                     <Sparkles className="w-4 h-4 text-emerald-200" />
                   </div>
-                  <h3 className="text-base sm:text-lg font-bold text-white">
-                    {answerData.title}
-                  </h3>
+                  <div>
+                    <h3 className="text-base sm:text-lg font-bold text-white">
+                      {answerData.title}
+                    </h3>
+                    {answerData.provider && (
+                      <span className="text-[10px] font-semibold text-emerald-400 uppercase tracking-wider block">
+                        Engine: {answerData.provider} • {answerData.model || 'agri-reasoning'}
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 {/* Audio Playback Controls */}

@@ -1,0 +1,109 @@
+{
+  "classes": [
+    "cow",
+    "sparrow",
+    "wild_boar",
+    "monkey",
+    "crow",
+    "deer",
+    "rodent",
+    "farm_machinery",
+    "wind_rain",
+    "human_voice"
+  ],
+  "class_info": {
+    "cow": {
+      "category": "beneficial",
+      "name": "Cow (Bovine Vocalization)",
+      "scientific_name": "Bos taurus",
+      "description": "Beneficial dairy and draft livestock. Low-frequency harmonic moo.",
+      "default_action": "protect",
+      "min_freq": 100,
+      "max_freq": 450
+    },
+    "sparrow": {
+      "category": "beneficial",
+      "name": "Sparrow (House Sparrow Call)",
+      "scientific_name": "Passer domesticus",
+      "description": "Beneficial insect-eating farmland bird. High-pitch frequency-modulated chirp.",
+      "default_action": "protect",
+      "min_freq": 2800,
+      "max_freq": 6500
+    },
+    "wild_boar": {
+      "category": "harmful",
+      "name": "Wild Boar (Grunt & Squeal)",
+      "scientific_name": "Sus scrofa",
+      "description": "Major crop-damaging pest that roots out tubers, groundnuts, maize and sugarcane.",
+      "default_action": "repel",
+      "min_freq": 150,
+      "max_freq": 1200
+    },
+    "monkey": {
+      "category": "harmful",
+      "name": "Rhesus Macaque (Alarm & Chatter)",
+      "scientific_name": "Macaca mulatta",
+      "description": "Agile troop pest that raids orchards, vegetables, pulses, and maize fields.",
+      "default_action": "repel",
+      "min_freq": 700,
+      "max_freq": 3200
+    },
+    "crow": {
+      "category": "harmful",
+      "name": "Crow (Harsh Cawing)",
+      "scientific_name": "Corvus splendens",
+      "description": "Scavenger bird that consumes sown seeds, ripening grains, and seedlings.",
+      "default_action": "repel",
+      "min_freq": 900,
+      "max_freq": 2600
+    },
+    "deer": {
+      "category": "harmful",
+      "name": "Spotted Deer / Nilgai (Snort & Bark)",
+      "scientific_name": "Axis axis / Boselaphus tragocamelus",
+      "description": "Nocturnal ungulate that grazes young crop leaves, cotton, and pulses.",
+      "default_action": "repel",
+      "min_freq": 400,
+      "max_freq": 1800
+    },
+    "rodent": {
+      "category": "harmful",
+      "name": "Field Rat / Rodent (High Squeak)",
+      "scientific_name": "Bandicota bengalensis",
+      "description": "Gnaws roots, stalks, and stored produce in field burrows.",
+      "default_action": "repel",
+      "min_freq": 4200,
+      "max_freq": 8500
+    },
+    "farm_machinery": {
+      "category": "ambient",
+      "name": "Farm Machinery (Tractor / Pump)",
+      "scientific_name": "Mechanical",
+      "description": "Continuous low-frequency diesel engine and water pump hum.",
+      "default_action": "ignore",
+      "min_freq": 40,
+      "max_freq": 250
+    },
+    "wind_rain": {
+      "category": "ambient",
+      "name": "Weather Noise (Wind & Rain)",
+      "scientific_name": "Meteorological",
+      "description": "Broadband ambient turbulence and precipitation background noise.",
+      "default_action": "ignore",
+      "min_freq": 20,
+      "max_freq": 8000
+    },
+    "human_voice": {
+      "category": "ambient",
+      "name": "Human Voice (Farmer Speech)",
+      "scientific_name": "Homo sapiens",
+      "description": "Farmer speech or bystander calls across the field.",
+      "default_action": "ignore",
+      "min_freq": 100,
+      "max_freq": 3400
+    }
+  },
+  "feature_dim": 131,
+  "sample_rate": 16000,
+  "test_accuracy": 100.0
+}

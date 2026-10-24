@@ -260,6 +260,110 @@ class VoiceAssistantService {
   }
 
   /**
+   * Ask the AgriSense AI Assistant Backend (LLM + Anti-Hallucination Telemetry Engine)
+   * Connects to FastAPI /api/assistant/chat endpoint
+   */
+  async askAssistant({
+    query = '',
+    conversationHistory = [],
+    langCode = 'en',
+    currentWeather,
+    dailyWeather,
+    historicalWeather,
+    farmTelemetry,
+    plantHealthResult,
+    location,
+    forceErrorTest = null,
+    apiKeyOverride = null,
+    providerOverride = null
+  }) {
+    const backendUrl =
+      typeof window !== 'undefined' &&
+      window.location.hostname !== 'localhost' &&
+      window.location.hostname !== '127.0.0.1'
+        ? `${window.location.origin}/api/assistant/chat`
+        : 'http://127.0.0.1:8000/api/assistant/chat';
+
+    const farmContext = {
+      location: location || { name: 'Your Farm Location' },
+      weather: currentWeather,
+      dailyWeather,
+      historicalWeather,
+      soil: farmTelemetry?.soilAnalysis,
+      waterTank: farmTelemetry?.waterTank,
+      zones: farmTelemetry?.zones,
+      plantHealthResult
+    };
+
+    try {
+      const res = await fetch(backendUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: query,
+          conversation_history: conversationHistory,
+          language: langCode,
+          farm_context: farmContext,
+          force_error_test: forceErrorTest,
+          api_key_override: apiKeyOverride,
+          provider_override: providerOverride
+        })
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        return {
+          success: false,
+          errorCode: errorData.error_code || `HTTP_${res.status}`,
+          message: errorData.message || `AI Assistant server returned status ${res.status}. Please click Retry.`,
+          retryable: true
+        };
+      }
+
+      const data = await res.json();
+      if (data.success === false) {
+        return {
+          success: false,
+          errorCode: data.error_code || 'API_ERROR',
+          message: data.message || 'AI Assistant encountered an issue. Please click Retry.',
+          retryable: true
+        };
+      }
+
+      return {
+        success: true,
+        title: data.title || 'AgriSense Farm Intelligence',
+        speechText: data.speechText || data.answer,
+        answer: data.answer,
+        displayCards: data.display_cards || [
+          { label: 'Provider', value: data.provider || 'AgriSense' },
+          { label: 'Engine', value: data.model || 'agri-reasoning-v2' },
+          { label: 'Status', value: 'Active' }
+        ],
+        provider: data.provider,
+        model: data.model
+      };
+    } catch (err) {
+      console.warn('Backend assistant API connection failed, using local contextual fallback:', err);
+      const localResult = this.generateAnswer({
+        query,
+        langCode,
+        currentWeather,
+        dailyWeather,
+        historicalWeather,
+        farmTelemetry,
+        plantHealthResult,
+        location
+      });
+      return {
+        ...localResult,
+        success: true,
+        isOfflineFallback: true
+      };
+    }
+  }
+
+  /**
    * Agricultural Intent Detection & Context-Aware Multilingual Answer Synthesis
    */
   generateAnswer({
@@ -1285,14 +1389,62 @@ class VoiceAssistantService {
       };
     }
 
-    // Default general weather in English
+    // Dynamic agricultural guidance or off-topic redirection
+    const cleanQuery = q && q.length > 0 ? q : 'farm inquiry';
+    const agriKeywords = [
+      'farm', 'crop', 'water', 'irrigation', 'weather', 'rain', 'soil', 'leaf', 'disease',
+      'pest', 'fertilizer', 'seed', 'harvest', 'mandi', 'price', 'yield', 'drip', 'sprinkler',
+      'spray', 'plant', 'grain', 'sowing', 'humidity', 'temperature', 'ph', 'cotton', 'wheat',
+      'jowar', 'maize', 'tomato', 'bajra', 'gram', 'mustard', 'pulses', 'agrisense',
+      'పంట', 'నీరు', 'వాతావరణం', 'వర్షం', 'మట్టి', 'నేల', 'తెగులు', 'ఎరువులు', 'విత్తనాలు', 'ధర', 'దిగుబడి',
+      'फसल', 'पानी', 'सिंचाई', 'मौसम', 'बारिश', 'मिट्टी', 'रोग', 'खाद', 'बीज', 'मंडी', 'भाव', 'पैदावार'
+    ];
+    const isAgriRelated = agriKeywords.some(k => cleanQuery.includes(k));
+
+    if (!isAgriRelated) {
+      if (langCode === 'te') {
+        return {
+          title: 'వ్యవసాయం లేదా నీటి పారుదల ప్రశ్నను అడగండి',
+          speechText: 'దయచేసి వ్యవసాయం, నీటి పారుదల లేదా వాతావరణానికి సంబంధించిన సరైన ప్రశ్నను అడగండి.',
+          answer: 'దయచేసి వ్యవసాయం, నీటి పారుదల (ఇరిగేషన్), వాతావరణం లేదా పంటల నిర్వహణకు సంబంధించిన సరైన ప్రశ్నను అడగండి.\n\nనేను రైతులకు వ్యవసాయ విజ్ఞానం మరియు క్షేత్రస్థాయి పంటల నిర్వహణలో సహాయం చేయడానికి సిద్ధంగా ఉన్నాను.\n\nసూచనలు:\n• నీటి పారుదల: "పంటలకు నీరు పెట్టడానికి ఉత్తమ సమయం ఏది?"\n• వాతావరణం: "రేపటి వాతావరణ సూచన ఏమిటి?"\n• పంట రక్షణ: "టమోటా ఆకులు పసుపు రంగులోకి ఎందుకు మారుతున్నాయి?"\n• పంట దిగుబడి: "పంట దిగుబడిని ఎలా పెంచాలి?"',
+          displayCards: [
+            { label: '💧 నీటి పారుదల', value: 'ఉత్తమ నీటి సమయాలు, డ్రిప్' },
+            { label: '🌦️ వాతావరణం', value: 'రేపటి వర్ష సూచన' },
+            { label: '🌱 పంటల రక్షణ', value: 'ఆకు తెగుళ్లు, మండి ధరలు' }
+          ]
+        };
+      }
+      if (langCode === 'hi') {
+        return {
+          title: 'कृपया कृषि, सिंचाई या मौसम से संबंधित प्रश्न पूछें',
+          speechText: 'कृपया कृषि, सिंचाई, मौसम या फसल प्रबंधन से संबंधित उचित प्रश्न पूछें।',
+          answer: 'कृपया कृषि, सिंचाई, मौसम या फसल प्रबंधन से संबंधित उचित प्रश्न पूछें।\n\nमैं किसानों को वैज्ञानिक कृषि सलाह और मौसम पूर्वानुमान में सहायता के लिए समर्पित हूँ।\n\nसुझाव:\n• सिंचाई: "फसलों को पानी देने का सबसे अच्छा समय क्या है?"\n• मौसम: "कल का मौसम कैसा रहेगा?"\n• फसल स्वास्थ्य: "टमाटर की पत्तियां पीली क्यों हो रही हैं?"\n• पैदावार: "फसल की पैदावार कैसे बढ़ाएं?"',
+          displayCards: [
+            { label: '💧 सिंचाई', value: 'सर्वोत्तम समय, ड्रिप पद्धति' },
+            { label: '🌦️ मौसम', value: 'कल का वर्षा पूर्वानुमान' },
+            { label: '🌱 फसल रक्षा', value: 'रोग निदान, मंडी भाव' }
+          ]
+        };
+      }
+      return {
+        title: 'Please Ask an Agriculture or Weather Question',
+        speechText: 'Please ask a proper question related to agriculture, irrigation, weather, or crop management.',
+        answer: 'Please ask a proper question related to agriculture, irrigation, weather, or crop management.\n\nI am specialized to assist farmers with agricultural science, meteorological forecasts, and field telemetry. Here are suggestions you can ask me:\n\n• 💧 **Irrigation & Water**: *"What is the best time to water crops?"* or *"How to save water using drip irrigation?"*\n• 🌦️ **Weather & Forecast**: *"What is the weather tomorrow?"* or *"How does humidity trigger fungal leaf disease?"*\n• 🌱 **Plant Health & Pathology**: *"Why are my tomato leaves turning yellow?"* or *"How to diagnose early blight?"*\n• 🌾 **Crop Planning & Mandi Prices**: *"What is the current market price of jowar?"* or *"How to increase crop yield?"*\n• 🧪 **Soil Health & Nutrients**: *"Explain soil pH in Telugu"* or *"What is the difference between organic and chemical fertilizers?"*',
+        displayCards: [
+          { label: '💧 Irrigation', value: 'Watering timing, soil moisture, drip systems' },
+          { label: '🌦️ Weather', value: 'Forecast tomorrow, rainfall, humidity & spraying' },
+          { label: '🌱 Crops & Soil', value: 'Crop yield, leaf diseases, soil pH, Mandi rates' }
+        ]
+      };
+    }
+
     return {
-      title: `Live Agricultural Weather for ${locName}`,
-      speechText: `In ${locName}, current temperature is ${currentTemp} degrees Celsius with relative humidity at ${currentHumidity} percent and wind speed of ${windSpeed} kilometers per hour. Weather conditions are stable for general agricultural activities.`,
+      title: `AgriSense Guidance: ${cleanQuery.length > 30 ? cleanQuery.substring(0, 30) + '...' : cleanQuery}`,
+      speechText: `Regarding your inquiry on "${cleanQuery}": AgriSense recommends evaluating crop stage, soil moisture conditions, and local microclimate before field interventions. Current conditions in ${locName} show ${currentTemp}°C with ${currentHumidity}% humidity.`,
       displayCards: [
-        { label: 'Temperature', value: `${currentTemp}°C` },
-        { label: 'Humidity', value: `${currentHumidity}%` },
-        { label: 'Wind Speed', value: `${windSpeed} km/h` }
+        { label: 'Inquiry', value: cleanQuery.length > 25 ? cleanQuery.substring(0, 25) + '...' : cleanQuery },
+        { label: 'Farm Location', value: locName },
+        { label: 'Current Weather', value: `${currentTemp}°C • ${currentHumidity}% RH` }
       ]
     };
   }

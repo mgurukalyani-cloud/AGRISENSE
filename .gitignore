@@ -14,8 +14,31 @@ dist-ssr
 .env
 .env.*
 !.env.example
+backend/.env
 scratch-chrome*
+check_browser.mjs
 /*.png
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+parts/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 
 # Editor directories and files
 .vscode/*

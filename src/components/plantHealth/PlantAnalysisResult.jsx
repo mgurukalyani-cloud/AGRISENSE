@@ -188,23 +188,34 @@ export default function PlantAnalysisResult({
               className="w-full h-full object-cover"
             />
 
-            {/* Visual Localization Hotspots Overlay */}
-            {showHotspots && hotspots && hotspots.map((spot) => (
-              <div
-                key={spot.id}
-                className="absolute border-2 border-dashed border-rose-500 bg-rose-500/20 rounded-lg pointer-events-none transition-all animate-pulse-subtle"
-                style={{
-                  left: `${spot.x}%`,
-                  top: `${spot.y}%`,
-                  width: `${spot.width}%`,
-                  height: `${spot.height}%`
-                }}
-              >
-                <span className="absolute -top-5 left-0 px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-600 text-white whitespace-nowrap shadow-xs">
-                  {spot.label}
-                </span>
-              </div>
-            ))}
+            {/* Visual Localization Hotspots & YOLO Bounding Boxes Overlay */}
+            {showHotspots && hotspots && hotspots.map((spot) => {
+              const isLeafBox = spot.label?.toLowerCase().includes('leaf');
+              return (
+                <div
+                  key={spot.id}
+                  className={`absolute rounded-xl pointer-events-none transition-all ${
+                    isLeafBox
+                      ? 'border-2 border-emerald-400 bg-emerald-500/20 shadow-md shadow-emerald-500/30'
+                      : 'border-2 border-dashed border-rose-500 bg-rose-500/20'
+                  }`}
+                  style={{
+                    left: `${spot.x}%`,
+                    top: `${spot.y}%`,
+                    width: `${spot.width}%`,
+                    height: `${spot.height}%`
+                  }}
+                >
+                  <span
+                    className={`absolute -top-5 left-0 px-2 py-0.5 rounded text-[10px] font-mono font-bold whitespace-nowrap shadow-xs ${
+                      isLeafBox ? 'bg-emerald-800 text-white border border-emerald-500/40' : 'bg-rose-600 text-white'
+                    }`}
+                  >
+                    {isLeafBox ? '🌿 ' : '⚠️ '}{spot.label}
+                  </span>
+                </div>
+              );
+            })}
 
             {isHealthy && (
               <div className="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-emerald-950/90 to-transparent text-white text-xs flex items-center space-x-2">
@@ -221,12 +232,12 @@ export default function PlantAnalysisResult({
                 onClick={() => setShowHotspots(!showHotspots)}
                 className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-colors cursor-pointer ${
                   showHotspots
-                    ? 'bg-rose-50 text-rose-800 border-rose-200'
+                    ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
                     : 'bg-slate-50 text-slate-600 border-slate-200'
                 }`}
               >
-                <Crosshair className="w-3.5 h-3.5" />
-                <span>{showHotspots ? t('plantHealth.hideLesions', 'Hide Suspected Lesions') : t('plantHealth.showLesions', 'Show Suspected Lesions')}</span>
+                <Crosshair className="w-3.5 h-3.5 text-emerald-600" />
+                <span>{showHotspots ? 'Hide YOLO Bounding Boxes' : 'Show YOLO Bounding Boxes'}</span>
               </button>
             ) : (
               <span className="text-xs text-slate-500 font-medium">
@@ -238,6 +249,38 @@ export default function PlantAnalysisResult({
               {t('plantHealth.greenCoverage', 'Green Coverage:')} {metrics.chlorophyllCoverage}%
             </span>
           </div>
+
+          {/* Extracted Leaf Crop Card (Demonstrating YOLO -> OpenCV Crop -> MobileNetV2 Pipeline) */}
+          {analysis.croppedLeaf && (
+            <div className="p-3.5 rounded-2xl bg-emerald-50/70 border border-emerald-200/80 space-y-2.5 animate-in fade-in duration-200">
+              <div className="flex items-center justify-between text-xs font-bold text-emerald-950">
+                <span className="flex items-center space-x-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <span>Focal Leaf Region Isolated by YOLOv8</span>
+                </span>
+                <span className="text-[10px] text-emerald-700 font-mono font-semibold">
+                  {analysis.cropBox ? `${analysis.cropBox.width}×${analysis.cropBox.height} px` : 'Auto-Cropped'}
+                </span>
+              </div>
+              <div className="flex items-center space-x-3">
+                <div className="w-20 h-20 rounded-xl overflow-hidden bg-slate-900 border border-emerald-300 shadow-xs shrink-0">
+                  <img
+                    src={analysis.croppedLeaf}
+                    alt="Isolated Leaf Crop"
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                <div className="text-[11px] text-emerald-900 space-y-1">
+                  <p className="font-semibold text-emerald-950">
+                    OpenCV Bounding Box Extracted
+                  </p>
+                  <p className="text-slate-600 leading-snug">
+                    Standardized to 224×224 RGB tensor and processed by MobileNetV2 pathology classifier.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Right Column: Diagnostic Intelligence */}
@@ -265,6 +308,21 @@ export default function PlantAnalysisResult({
               <p className="text-xs text-slate-600 mt-0.5">
                 {t('plantHealth.etiologyLabel', 'Pathogen / Etiology:')} <strong>{diseaseInfo.pathogen}</strong>
               </p>
+
+              {/* CV Model Identity Badges */}
+              <div className="flex flex-wrap items-center gap-2 pt-2">
+                {analysis.detectedPlant && (
+                  <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-emerald-800 text-white text-[11px] font-bold shadow-2xs">
+                    <span>🌿 YOLOv8 Localized: {analysis.detectedPlant} Leaf</span>
+                  </span>
+                )}
+                {analysis.rawClass && (
+                  <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-200 font-mono text-[11px] shadow-2xs">
+                    <span className="text-slate-400">Class:</span>
+                    <span>{analysis.rawClass}</span>
+                  </span>
+                )}
+              </div>
             </div>
 
             {/* Confidence Gauge Bar */}
@@ -281,7 +339,43 @@ export default function PlantAnalysisResult({
                   style={{ width: `${confidence}%` }}
                 />
               </div>
+              <p className="text-[10px] text-slate-500 italic pt-0.5 leading-snug">
+                * Statistical model confidence represents neural pattern correlation across 38 PlantVillage pathology classes; not a certified laboratory assay.
+              </p>
             </div>
+
+            {/* Real Neural Network Probabilities Breakdown */}
+            {analysis.topPredictions && analysis.topPredictions.length > 1 && (
+              <div className="p-3.5 rounded-2xl bg-white/80 border border-slate-200/80 space-y-2">
+                <div className="flex items-center justify-between text-xs font-bold text-slate-800">
+                  <span className="flex items-center space-x-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                    <span>Neural Classifier Probability Distribution</span>
+                  </span>
+                  <span className="text-[10px] text-slate-500 font-mono">MobileNetV2 (PlantVillage 38-Class)</span>
+                </div>
+                <div className="space-y-1.5">
+                  {analysis.topPredictions.slice(0, 4).map((pred, i) => (
+                    <div key={i} className="space-y-0.5">
+                      <div className="flex justify-between text-[11px]">
+                        <span className={`truncate max-w-[220px] sm:max-w-xs ${i === 0 ? 'font-bold text-slate-900' : 'text-slate-600'}`}>
+                          {i + 1}. {pred.label}
+                        </span>
+                        <span className={`font-mono font-bold ${i === 0 ? 'text-emerald-700' : 'text-slate-500'}`}>
+                          {pred.confidence_percent}%
+                        </span>
+                      </div>
+                      <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all duration-300 ${i === 0 ? 'bg-emerald-600' : 'bg-slate-400'}`}
+                          style={{ width: `${pred.confidence_percent}%` }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Low Confidence Advisory */}
             {analysis.isLowConfidence && (
