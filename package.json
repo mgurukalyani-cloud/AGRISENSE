@@ -4,8 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "node scripts/prepare-build.mjs && vite",
+    "prebuild": "node scripts/prepare-build.mjs",
     "build": "vite build",
+    "postbuild": "node scripts/finalize-build.mjs",
     "lint": "oxlint src",
     "preview": "vite preview"
   },
