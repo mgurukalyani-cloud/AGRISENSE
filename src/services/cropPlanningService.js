@@ -234,7 +234,7 @@ export const CROPS_DATABASE = [
   {
     id: 'paddy_rice',
     imageUrl: './crops/paddy_rice.jpg',
-    fallbackImageUrl: 'https://images.unsplash.com/photo-1536657464919-892534f60d6e?auto=format&fit=crop&w=600&q=80',
+    fallbackImageUrl: 'https://images.unsplash.com/photo-1582488667081-0152d8e777e1?auto=format&fit=crop&w=600&q=80',
     imageAlt: 'Lush green wetland paddy rice field',
     name: 'Paddy / Rice (Dhan)',
     botanicalName: 'Oryza sativa',
