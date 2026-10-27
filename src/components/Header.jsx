@@ -36,6 +36,7 @@ export default function Header({
   onOpenSettings,
   onOpenLanguageSelector,
   onOpenVoiceAssistant,
+  onNavigateHome,
   provider = 'Open-Meteo & WMO',
   modelSources = 'ECMWF IFS / DWD ICON'
 }) {
@@ -122,27 +123,28 @@ export default function Header({
       {/* Main Header Bar */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 sm:h-20">
-          {/* Logo & Platform Title */}
-          <div className="flex items-center space-x-2.5 sm:space-x-3">
+          {/* Logo & Platform Title (Clickable -> Redirects to Home) */}
+          <button
+            onClick={onNavigateHome}
+            type="button"
+            className="flex items-center space-x-2.5 sm:space-x-3 text-left group cursor-pointer transition-transform hover:opacity-95 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 rounded-2xl p-1 -m-1"
+            title={t('app.returnHome', 'Return to Home Page')}
+          >
             {/* KLH Farms Logo */}
-            <div className="flex items-center bg-white p-0.5 rounded-full shadow-xs border border-emerald-900/10 shrink-0 overflow-hidden ring-2 ring-emerald-500/20">
+            <div className="flex items-center bg-white p-0.5 rounded-full shadow-xs border border-emerald-900/10 shrink-0 overflow-hidden ring-2 ring-emerald-500/25 group-hover:ring-emerald-600 group-hover:scale-105 transition-all">
               <img
                 src={`${import.meta.env.BASE_URL}klh-farms-logo.png`}
                 alt="KLH Farms Logo"
                 className="h-11 sm:h-13 w-11 sm:w-13 object-cover rounded-full"
                 onError={(e) => {
-                  e.currentTarget.src = '/klh-farms-logo.png';
+                  e.currentTarget.src = './klh-farms-logo.png';
                 }}
               />
             </div>
 
-            <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gradient-to-br from-emerald-700 to-green-600 flex items-center justify-center text-white shadow-md shadow-emerald-700/20 shrink-0">
-              <Sprout className="w-6 h-6" />
-            </div>
-
             <div>
               <div className="flex items-center space-x-2">
-                <span className="text-xl sm:text-2xl font-bold tracking-tight text-emerald-950">
+                <span className="text-xl sm:text-2xl font-black tracking-tight text-emerald-950 group-hover:text-emerald-800 transition-colors">
                   {t('app.title', 'AgriSense')}
                 </span>
                 <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
@@ -153,7 +155,7 @@ export default function Header({
                 {t('app.tagline', 'Real-World Weather Monitoring & Agro-Advisory')}
               </p>
             </div>
-          </div>
+          </button>
 
           {/* Center Search / Location Quick Display (Desktop) */}
           <div className="hidden md:flex items-center flex-1 max-w-md mx-6">
