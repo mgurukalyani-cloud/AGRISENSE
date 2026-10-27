@@ -12,10 +12,13 @@ import {
   Coins,
   Settings,
   AlertCircle,
+  AlertTriangle,
   CloudRain,
   Sun,
   ShieldCheck,
-  CheckCircle2
+  CheckCircle2,
+  XCircle,
+  Filter
 } from 'lucide-react';
 
 import { recommendCrops, SEASONS, SOIL_TYPES, IRRIGATION_TYPES } from '../../services/cropPlanningService';
@@ -36,6 +39,9 @@ export default function CropPlanningPage({
   // Active Sub-Tab
   const [activeSubTab, setActiveSubTab] = useState('recommendations'); // 'recommendations' | 'calculator' | 'mandi_prices' | 'comparator'
   
+  // Suitability Filter for Recommendations view: 'recommended' | 'unsuitable' | 'all'
+  const [suitabilityFilter, setSuitabilityFilter] = useState('recommended');
+
   // Selected focus crop for calculator/mandi views
   const [focusCropId, setFocusCropId] = useState('wheat');
 
@@ -100,10 +106,26 @@ export default function CropPlanningPage({
     }
   }, [dailyWeather, currentWeather, profile.season]);
 
-  // Generate Ranked Crop Recommendations
+  // Generate Ranked Crop Recommendations (both suitable & unsuitable)
   const recommendations = useMemo(() => {
     return recommendCrops(profile, currentWeather);
   }, [profile, currentWeather]);
+
+  // Split into suitable vs unsuitable crops
+  const suitableCrops = useMemo(() => {
+    return recommendations.filter(r => r.isSuitable);
+  }, [recommendations]);
+
+  const unsuitableCrops = useMemo(() => {
+    return recommendations.filter(r => !r.isSuitable);
+  }, [recommendations]);
+
+  // Filtered array according to active filter pill
+  const displayedRecommendations = useMemo(() => {
+    if (suitabilityFilter === 'recommended') return suitableCrops;
+    if (suitabilityFilter === 'unsuitable') return unsuitableCrops;
+    return recommendations;
+  }, [suitabilityFilter, suitableCrops, unsuitableCrops, recommendations]);
 
   // Sowing month label
   const seasonObj = SEASONS.find(s => s.id === profile.season);
@@ -132,7 +154,7 @@ export default function CropPlanningPage({
                 ICAR & AGMARKNET Integrated
               </span>
               <span className="text-xs text-emerald-200">
-                • Verified University Crop Calendars
+                • Verified University Crop Calendars & Actual Photos
               </span>
             </div>
 
@@ -141,7 +163,7 @@ export default function CropPlanningPage({
             </h1>
 
             <p className="text-xs sm:text-sm text-emerald-100/90 leading-relaxed">
-              {t('cropPlanning.moduleDescription', 'Evaluate university-recommended crop varieties for your soil and season, inspect authentic AGMARKNET mandi prices, and project cultivation costs, yield scenarios, and net profit.')}
+              {t('cropPlanning.moduleDescription', 'Evaluate university-recommended and unsuitable crops for your microclimate with actual photos, agronomic disqualification warnings, authentic AGMARKNET mandi prices, and full cultivation economics.')}
             </p>
           </div>
 
@@ -222,7 +244,12 @@ export default function CropPlanningPage({
       {/* 4. SUB-MODULE NAVIGATION TABS */}
       <div className="flex flex-wrap gap-2 border-b border-slate-200 pb-3">
         {[
-          { id: 'recommendations', label: t('cropPlanning.tabRecommendations', '1. Seasonal Crop Recommendations'), icon: Sprout, count: recommendations.length },
+          {
+            id: 'recommendations',
+            label: t('cropPlanning.tabRecommendations', '1. Seasonal Crop Recommendations'),
+            icon: Sprout,
+            countText: `${suitableCrops.length} Suitable / ${unsuitableCrops.length} Unsuitable`
+          },
           { id: 'calculator', label: t('cropPlanning.tabCostProfit', '2. Cultivation Cost & Profit Engine'), icon: Calculator },
           { id: 'mandi_prices', label: t('cropPlanning.tabMandi', '3. AGMARKNET Mandi Prices'), icon: TrendingUp },
           { id: 'comparator', label: t('cropPlanning.tabCompare', '4. Cross-Crop Comparator'), icon: Scale }
@@ -241,9 +268,9 @@ export default function CropPlanningPage({
             >
               <Icon className="w-4 h-4" />
               <span>{tab.label}</span>
-              {tab.count && (
+              {tab.countText && (
                 <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${isActive ? 'bg-emerald-700 text-white' : 'bg-slate-100 text-slate-700'}`}>
-                  {tab.count}
+                  {tab.countText}
                 </span>
               )}
             </button>
@@ -253,16 +280,101 @@ export default function CropPlanningPage({
 
       {/* 5. ACTIVE TAB CONTENT VIEW */}
       <div>
-        {/* SUB-VIEW 1: CROP RECOMMENDATIONS */}
+        {/* SUB-VIEW 1: CROP RECOMMENDATIONS & UNSUITABILITY ANALYSIS */}
         {activeSubTab === 'recommendations' && (
-          <div className="space-y-6">
-            <div className="flex justify-between items-center text-xs text-slate-500">
-              <span>Displaying <strong>{recommendations.length} verified crops</strong> ranked by agronomic, soil, and water compatibility</span>
-              <span className="font-semibold text-emerald-800">CACP & ICAR Standards</span>
+          <div className="space-y-5">
+            
+            {/* Suitability Filter Selector Bar */}
+            <div className="bg-white rounded-2xl p-3 sm:p-4 border border-slate-200/90 shadow-2xs flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-2">
+                
+                {/* 1. Suitable Crops Pill */}
+                <button
+                  onClick={() => setSuitabilityFilter('recommended')}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-2 cursor-pointer ${
+                    suitabilityFilter === 'recommended'
+                      ? 'bg-emerald-800 text-white shadow-xs ring-1 ring-emerald-600'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Recommended Crops</span>
+                  <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                    suitabilityFilter === 'recommended' ? 'bg-emerald-700 text-white' : 'bg-slate-200 text-slate-800'
+                  }`}>
+                    {suitableCrops.length}
+                  </span>
+                </button>
+
+                {/* 2. Unsuitable Crops to Avoid Pill */}
+                <button
+                  onClick={() => setSuitabilityFilter('unsuitable')}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-2 cursor-pointer ${
+                    suitabilityFilter === 'unsuitable'
+                      ? 'bg-rose-800 text-white shadow-xs ring-1 ring-rose-600'
+                      : 'bg-rose-50 text-rose-800 hover:bg-rose-100 border border-rose-200'
+                  }`}
+                >
+                  <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
+                  <span>Unsuitable Crops to Avoid</span>
+                  <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                    suitabilityFilter === 'unsuitable' ? 'bg-rose-700 text-white' : 'bg-rose-200 text-rose-900'
+                  }`}>
+                    {unsuitableCrops.length}
+                  </span>
+                </button>
+
+                {/* 3. All Crops Pill */}
+                <button
+                  onClick={() => setSuitabilityFilter('all')}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-2 cursor-pointer ${
+                    suitabilityFilter === 'all'
+                      ? 'bg-slate-900 text-white shadow-xs'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  <span>All Verified Crops</span>
+                  <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                    suitabilityFilter === 'all' ? 'bg-slate-700 text-white' : 'bg-slate-200 text-slate-800'
+                  }`}>
+                    {recommendations.length}
+                  </span>
+                </button>
+
+              </div>
+
+              <div className="text-xs text-slate-500 font-medium">
+                Showing <strong>{displayedRecommendations.length}</strong> of <strong>{recommendations.length}</strong> crops with actual photos
+              </div>
             </div>
 
+            {/* Contextual Advisory Banner for the Active Filter */}
+            {suitabilityFilter === 'unsuitable' && (
+              <div className="p-4 rounded-2xl bg-rose-50/90 border border-rose-200 text-xs text-rose-950 flex items-start space-x-3 animate-in fade-in duration-200">
+                <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <h4 className="font-extrabold text-sm text-rose-900">
+                    Why These Crops Are Unsuitable for Your Current Conditions:
+                  </h4>
+                  <p className="leading-relaxed text-rose-800">
+                    The <strong>{unsuitableCrops.length} crops</strong> below are not recommended under your active farm profile (Season: <strong>{profile.season.toUpperCase()}</strong>, Soil: <strong>{soilObj?.name}</strong>, Water Source: <strong>{irrObj?.name}</strong>, Temperature: <strong>{currentWeather?.temperature_2m || 24}°C</strong>). Sowing these crops now poses significant risks including photoperiod mismatch, moisture stress, poor seed germination, or severe yield penalty. Inspect each card below for specific scientific reasons.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {suitabilityFilter === 'recommended' && (
+              <div className="p-3.5 rounded-2xl bg-emerald-50/80 border border-emerald-200 text-xs text-emerald-950 flex items-center space-x-2.5 animate-in fade-in duration-200">
+                <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
+                <p className="leading-relaxed">
+                  <strong>{suitableCrops.length} Crops Approved:</strong> Recommended based on high climate alignment, soil drainage/pH suitability, and water source reliability for {seasonObj?.name}.
+                </p>
+              </div>
+            )}
+
+            {/* Recommendations & Unsuitable Crops Cards Grid */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {recommendations.map((rec) => (
+              {displayedRecommendations.map((rec) => (
                 <CropRecommendationCard
                   key={rec.crop.id}
                   rec={rec}
@@ -272,6 +384,7 @@ export default function CropPlanningPage({
                 />
               ))}
             </div>
+
           </div>
         )}
 

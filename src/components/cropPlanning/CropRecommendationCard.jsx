@@ -14,7 +14,11 @@ import {
   Compass,
   ArrowRight,
   TrendingUp,
-  AlertTriangle
+  AlertTriangle,
+  AlertCircle,
+  CheckCircle2,
+  XCircle,
+  Info
 } from 'lucide-react';
 import { getMandiPriceForCrop } from '../../services/mandiPriceService';
 
@@ -28,83 +32,205 @@ export default function CropRecommendationCard({
   const [isExpanded, setIsExpanded] = useState(false);
   const [activeTab, setActiveTab] = useState('varieties'); // 'varieties' | 'inputs' | 'irrigation' | 'pests'
 
-  const { crop, scores, suitabilityTier, riskLevel, primaryJustification, baselineCostPerAcre } = rec;
+  const {
+    crop,
+    scores,
+    suitabilityTier,
+    riskLevel,
+    isSuitable,
+    unsuitableReasons = [],
+    disqualificationSummary,
+    mitigationAdvice,
+    primaryJustification,
+    baselineCostPerAcre
+  } = rec;
+
+  const [imgSrc, setImgSrc] = useState(crop.imageUrl || crop.fallbackImageUrl);
+  const [imgLoaded, setImgLoaded] = useState(false);
+
   const mandiPrice = getMandiPriceForCrop(crop.id, farmerState);
 
-  const getTierBadge = (tier) => {
-    switch (tier) {
+  const getTierBadge = () => {
+    if (!isSuitable) {
+      return {
+        cardBorder: 'border-rose-300 ring-1 ring-rose-200/60 shadow-xs hover:border-rose-400',
+        badgeBg: 'bg-rose-600 text-white',
+        badgeIcon: AlertTriangle,
+        label: t('cropPlanning.tierUnsuitable', 'Unsuitable to Sow'),
+        subLabel: 'Agronomic Warning'
+      };
+    }
+
+    switch (suitabilityTier) {
       case 'HIGHLY_RECOMMENDED':
         return {
-          bg: 'bg-emerald-100 text-emerald-900 border-emerald-300',
-          badge: 'bg-emerald-700 text-white',
-          label: t('cropPlanning.tierHighlyRecommended', 'Highly Recommended')
+          cardBorder: 'border-emerald-300 ring-1 ring-emerald-200/60 shadow-xs hover:border-emerald-400',
+          badgeBg: 'bg-emerald-700 text-white',
+          badgeIcon: CheckCircle2,
+          label: t('cropPlanning.tierHighlyRecommended', 'Highly Recommended'),
+          subLabel: 'Optimal Match'
         };
       case 'SUITABLE':
         return {
-          bg: 'bg-blue-50 text-blue-900 border-blue-200',
-          badge: 'bg-blue-700 text-white',
-          label: t('cropPlanning.tierSuitable', 'Suitable')
+          cardBorder: 'border-blue-200 ring-1 ring-blue-100 shadow-xs hover:border-blue-300',
+          badgeBg: 'bg-blue-700 text-white',
+          badgeIcon: CheckCircle2,
+          label: t('cropPlanning.tierSuitable', 'Suitable Crop'),
+          subLabel: 'Viable Match'
         };
       default:
         return {
-          bg: 'bg-amber-50 text-amber-900 border-amber-200',
-          badge: 'bg-amber-700 text-white',
-          label: t('cropPlanning.tierMarginal', 'Marginal / Alternative')
+          cardBorder: 'border-amber-200 shadow-xs hover:border-amber-300',
+          badgeBg: 'bg-amber-700 text-white',
+          badgeIcon: Info,
+          label: t('cropPlanning.tierMarginal', 'Marginal / Alternative'),
+          subLabel: 'Conditional'
         };
     }
   };
 
-  const tierStyle = getTierBadge(suitabilityTier);
+  const tierMeta = getTierBadge();
+  const TierIcon = tierMeta.badgeIcon;
 
   return (
-    <div className="bg-white rounded-3xl border border-slate-200/90 shadow-xs hover:shadow-md transition-all overflow-hidden flex flex-col">
+    <div className={`bg-white rounded-3xl border transition-all overflow-hidden flex flex-col ${tierMeta.cardBorder}`}>
       
-      {/* Top Header & Suitability Banner */}
-      <div className={`p-4 sm:p-5 border-b ${tierStyle.bg} flex flex-wrap items-center justify-between gap-3`}>
-        <div className="flex items-center space-x-3">
-          <div className="w-12 h-12 rounded-2xl bg-white shadow-xs border border-slate-200/60 flex items-center justify-center shrink-0">
-            <Sprout className="w-6 h-6 text-emerald-700" />
+      {/* 1. ACTUAL CROP PHOTOGRAPH BANNER */}
+      <div className="relative h-48 sm:h-56 w-full overflow-hidden bg-slate-900 group">
+        <img
+          src={imgSrc}
+          alt={crop.imageAlt || crop.name}
+          className={`w-full h-full object-cover transition-transform duration-700 group-hover:scale-105 ${
+            imgLoaded ? 'opacity-100' : 'opacity-85'
+          } ${!isSuitable ? 'filter saturate-90 brightness-95' : ''}`}
+          loading="lazy"
+          onLoad={() => setImgLoaded(true)}
+          onError={() => {
+            if (crop.fallbackImageUrl && imgSrc !== crop.fallbackImageUrl) {
+              setImgSrc(crop.fallbackImageUrl);
+            }
+          }}
+        />
+
+        {/* Ambient Gradient Overlays for readable text & badges */}
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/30 to-black/50 pointer-events-none" />
+
+        {/* Top Badges Overlay */}
+        <div className="absolute top-3 left-3 right-3 flex items-center justify-between gap-2 z-10">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {/* Category Pill */}
+            <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-black/60 text-white/95 backdrop-blur-md border border-white/20 shadow-xs">
+              {crop.category}
+            </span>
+
+            {/* Suitability Tier Pill */}
+            <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center space-x-1 backdrop-blur-md shadow-xs ${tierMeta.badgeBg}`}>
+              <TierIcon className="w-3 h-3" />
+              <span>{tierMeta.label}</span>
+            </span>
           </div>
-          <div>
-            <div className="flex items-center space-x-2">
-              <span className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full ${tierStyle.badge}`}>
-                {tierStyle.label}
-              </span>
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                {crop.category.toUpperCase()}
+
+          {/* Match Score or Risk Factor Gauge */}
+          {isSuitable ? (
+            <div className="px-3 py-1.5 rounded-xl bg-white/90 backdrop-blur-md border border-white/40 text-right shadow-sm">
+              <span className="text-[9px] font-bold text-slate-500 uppercase block">Match Score</span>
+              <span className="text-sm sm:text-base font-black text-emerald-800 font-mono leading-none">
+                {scores.composite}%
               </span>
             </div>
-            <h3 className="text-base sm:text-lg font-black text-slate-900 mt-0.5">
-              {crop.name}
+          ) : (
+            <div className="px-3 py-1.5 rounded-xl bg-rose-950/85 backdrop-blur-md border border-rose-500/40 text-right shadow-sm">
+              <span className="text-[9px] font-bold text-rose-300 uppercase block">Risk Profile</span>
+              <span className="text-xs font-black text-rose-100 font-mono leading-none flex items-center space-x-1">
+                <AlertTriangle className="w-3 h-3 text-rose-400 inline" />
+                <span>HIGH RISK</span>
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Bottom Crop Name & Season Identification on Photo */}
+        <div className="absolute bottom-3 left-4 right-4 flex items-end justify-between gap-3 text-white z-10">
+          <div>
+            <h3 className="text-lg sm:text-xl font-black text-white drop-shadow-md tracking-tight flex items-center space-x-2">
+              <span>{crop.name}</span>
             </h3>
-            <p className="text-[11px] text-slate-500 italic">
+            <p className="text-xs text-emerald-200 font-medium italic drop-shadow-sm mt-0.5">
               {crop.botanicalName}
             </p>
           </div>
-        </div>
 
-        {/* Suitability Composite Score Gauge */}
-        <div className="flex items-center space-x-2 bg-white/90 backdrop-blur-xs px-3.5 py-2 rounded-2xl border border-slate-200 shadow-2xs">
-          <div className="text-right">
-            <span className="text-[10px] font-bold text-slate-400 block uppercase">Match Score</span>
-            <span className="text-base font-black text-emerald-800 font-mono">{scores.composite}%</span>
-          </div>
-          <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold text-xs">
-            <Award className="w-4 h-4" />
+          <div className="text-right shrink-0">
+            <span className="text-[10px] font-extrabold uppercase tracking-wider bg-white/20 backdrop-blur-md text-white px-2.5 py-1 rounded-lg border border-white/30 inline-block shadow-xs">
+              {crop.seasons.map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(' / ')}
+            </span>
           </div>
         </div>
       </div>
 
-      {/* Primary Agronomic Justification */}
-      <div className="px-5 py-3.5 bg-slate-50/70 border-b border-slate-100 text-xs text-slate-700 flex items-start space-x-2">
-        <Compass className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
-        <p className="leading-relaxed">
-          <strong>Why this crop:</strong> {primaryJustification}
-        </p>
-      </div>
+      {/* 2. DEDICATED UNSUITABILITY ALERT BOX (IF CROP IS UNSUITABLE) */}
+      {!isSuitable ? (
+        <div className="p-4 sm:p-5 bg-gradient-to-br from-rose-50 via-rose-50/70 to-amber-50/40 border-b border-rose-200 text-xs space-y-3">
+          <div className="flex items-start space-x-2.5">
+            <div className="w-8 h-8 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center shrink-0 mt-0.5 border border-rose-200 shadow-2xs">
+              <XCircle className="w-4 h-4 text-rose-600" />
+            </div>
+            <div className="space-y-0.5">
+              <div className="flex items-center space-x-2">
+                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-rose-700 text-white tracking-wide">
+                  Agronomic Disqualification
+                </span>
+                <span className="text-xs font-black text-rose-950">
+                  {disqualificationSummary || 'Not Recommended Under Current Farm Parameters'}
+                </span>
+              </div>
+              <p className="text-[11px] text-rose-900 leading-relaxed font-medium">
+                Planting <strong>{crop.name}</strong> now is not advisable due to the following critical condition mismatches:
+              </p>
+            </div>
+          </div>
 
-      {/* 4-Metric Key Agronomic Snapshot */}
-      <div className="p-5 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs border-b border-slate-100">
+          {/* Detailed Bullet Points of Unsuitable Reasons */}
+          {unsuitableReasons && unsuitableReasons.length > 0 && (
+            <div className="bg-white/95 rounded-2xl p-3.5 border border-rose-200 shadow-2xs space-y-2">
+              <span className="font-extrabold text-[10px] text-rose-950 uppercase tracking-wider block flex items-center space-x-1.5">
+                <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
+                <span>Agronomic Conflict Analysis:</span>
+              </span>
+              <ul className="space-y-1.5 pl-1">
+                {unsuitableReasons.map((reason, idx) => (
+                  <li key={idx} className="flex items-start space-x-2 text-rose-900 leading-relaxed text-[11px]">
+                    <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0 mt-1.5" />
+                    <span>{reason}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Mitigation Guidance (If farmer insists on planting) */}
+          {mitigationAdvice && (
+            <div className="bg-amber-50 rounded-2xl p-3 border border-amber-200 text-[11px] text-amber-950 flex items-start space-x-2">
+              <ShieldCheck className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+              <div className="space-y-0.5">
+                <strong className="text-amber-900 block font-bold">Actionable Mitigation if Cultivated Anyway:</strong>
+                <p className="text-amber-800 leading-relaxed">{mitigationAdvice}</p>
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        /* Primary Agronomic Justification for Suitable Crops */
+        <div className="px-5 py-3.5 bg-emerald-50/60 border-b border-emerald-100 text-xs text-slate-700 flex items-start space-x-2.5">
+          <Compass className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
+          <p className="leading-relaxed">
+            <strong className="text-emerald-950">Why this crop is recommended:</strong> {primaryJustification}
+          </p>
+        </div>
+      )}
+
+      {/* 3. 4-METRIC KEY AGRONOMIC SNAPSHOT */}
+      <div className="p-4 sm:p-5 grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3 text-xs border-b border-slate-100">
         
         {/* Sowing & Duration */}
         <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200/60 space-y-1">
@@ -113,7 +239,7 @@ export default function CropRecommendationCard({
             <span>Sowing Window</span>
           </span>
           <p className="font-black text-slate-900">{crop.sowingMonths.slice(0, 2).join(' - ')}</p>
-          <p className="text-[10px] text-slate-500">{crop.durationDays}</p>
+          <p className="text-[10px] text-slate-500 font-medium">{crop.durationDays}</p>
         </div>
 
         {/* Water Requirement */}
@@ -141,7 +267,7 @@ export default function CropRecommendationCard({
             <span>Cost / Acre</span>
           </span>
           <p className="font-black text-slate-900 font-mono">₹{baselineCostPerAcre.toLocaleString()}</p>
-          <p className="text-[10px] text-slate-500">CACP/ICAR norm</p>
+          <p className="text-[10px] text-slate-500 font-medium">CACP/ICAR norm</p>
         </div>
 
         {/* Modal Mandi Price & MSP */}
@@ -150,15 +276,17 @@ export default function CropRecommendationCard({
             <TrendingUp className="w-3 h-3 text-emerald-700" />
             <span>Modal Mandi Price</span>
           </span>
-          <p className="font-black text-emerald-800 font-mono">₹{mandiPrice.modalPrice.toLocaleString()}<span className="text-[10px] text-slate-500 font-normal">/q</span></p>
+          <p className="font-black text-emerald-800 font-mono">
+            ₹{mandiPrice.modalPrice.toLocaleString()}<span className="text-[10px] text-slate-500 font-normal">/q</span>
+          </p>
           {crop.mspPerQuintal && (
-            <p className="text-[10px] text-slate-600">MSP: ₹{crop.mspPerQuintal}/q</p>
+            <p className="text-[10px] text-slate-600 font-medium">MSP: ₹{crop.mspPerQuintal}/q</p>
           )}
         </div>
 
       </div>
 
-      {/* Expandable Agronomic Accordion Details */}
+      {/* 4. EXPANDABLE AGRONOMIC ACCORDION DETAILS */}
       {isExpanded && (
         <div className="p-5 bg-slate-50/50 border-b border-slate-200/80 space-y-4 animate-in fade-in duration-200">
           
@@ -275,7 +403,7 @@ export default function CropRecommendationCard({
         </div>
       )}
 
-      {/* Card Action Footer */}
+      {/* 5. CARD ACTION FOOTER */}
       <div className="p-4 bg-white flex flex-wrap items-center justify-between gap-3 mt-auto">
         <button
           onClick={() => setIsExpanded(!isExpanded)}

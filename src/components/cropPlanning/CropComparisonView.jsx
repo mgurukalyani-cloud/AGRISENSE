@@ -94,7 +94,7 @@ export default function CropComparisonView({
                 {t('cropPlanning.compareCropsTitle', 'Cross-Crop Multi-Dimensional Matrix')}
               </h2>
               <p className="text-xs text-slate-500">
-                {t('cropPlanning.compareSubtitle', 'Compare economics, water demands, durations, and market returns across suitable candidates')}
+                {t('cropPlanning.compareSubtitle', 'Compare economics, water demands, durations, and market returns across suitable candidates with actual crop photos')}
               </p>
             </div>
           </div>
@@ -156,7 +156,7 @@ export default function CropComparisonView({
         </div>
       </div>
 
-      {/* Comparison Grid (Cards for Mobile, Table for Desktop) */}
+      {/* Comparison Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
         {sorted.slice(0, 6).map((item, idx) => (
           <div
@@ -168,15 +168,28 @@ export default function CropComparisonView({
             } p-5 space-y-4 flex flex-col justify-between`}
           >
             <div className="space-y-3">
-              {/* Header */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <span className="w-6 h-6 rounded-full bg-slate-900 text-white font-mono font-bold text-xs flex items-center justify-center">
-                    #{idx + 1}
-                  </span>
-                  <h3 className="font-black text-slate-900 text-base">{item.crop.name}</h3>
+              {/* Header with Crop Thumbnail */}
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center space-x-2.5">
+                  <div className="relative">
+                    <img
+                      src={item.crop.imageUrl || item.crop.fallbackImageUrl}
+                      alt={item.crop.name}
+                      className="w-12 h-12 rounded-2xl object-cover shrink-0 border border-slate-200 shadow-2xs"
+                      onError={(e) => {
+                        if (item.crop.fallbackImageUrl) e.currentTarget.src = item.crop.fallbackImageUrl;
+                      }}
+                    />
+                    <span className="absolute -top-1.5 -left-1.5 w-5 h-5 rounded-full bg-slate-900 text-white font-mono font-bold text-[10px] flex items-center justify-center border border-white">
+                      #{idx + 1}
+                    </span>
+                  </div>
+                  <div>
+                    <h3 className="font-black text-slate-900 text-sm sm:text-base leading-tight">{item.crop.name}</h3>
+                    <span className="text-[10px] text-slate-500 italic block">{item.crop.botanicalName}</span>
+                  </div>
                 </div>
-                <span className="text-xs font-mono font-bold text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                <span className="text-xs font-mono font-bold text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200 shrink-0">
                   {item.scores.composite}% Match
                 </span>
               </div>
