@@ -7,6 +7,7 @@ const DIST = path.join(ROOT, 'dist');
 const DOCS = path.join(ROOT, 'docs');
 
 function copyRecursive(src, dest) {
+  if (!fs.existsSync(src)) return;
   if (!fs.existsSync(dest)) fs.mkdirSync(dest, { recursive: true });
   const entries = fs.readdirSync(src, { withFileTypes: true });
   for (const entry of entries) {
@@ -26,9 +27,10 @@ execSync('npm run build', { stdio: 'inherit' });
 console.log('2. Preparing root and docs/ copies...');
 const distHtml = fs.readFileSync(path.join(DIST, 'index.html'), 'utf8');
 
-// Ensure root has production assets
+// Ensure root has production assets including audio and crops
 copyRecursive(path.join(DIST, 'assets'), path.join(ROOT, 'assets'));
 copyRecursive(path.join(DIST, 'crops'), path.join(ROOT, 'crops'));
+copyRecursive(path.join(ROOT, 'public/audio'), path.join(ROOT, 'audio'));
 fs.writeFileSync(path.join(ROOT, 'index.html'), distHtml);
 fs.writeFileSync(path.join(ROOT, '404.html'), distHtml);
 fs.writeFileSync(path.join(ROOT, '.nojekyll'), '');
@@ -38,13 +40,14 @@ if (fs.existsSync(DOCS)) {
   fs.rmSync(DOCS, { recursive: true, force: true });
 }
 copyRecursive(DIST, DOCS);
+copyRecursive(path.join(ROOT, 'public/audio'), path.join(DOCS, 'audio'));
 fs.writeFileSync(path.join(DOCS, '.nojekyll'), '');
 fs.writeFileSync(path.join(DOCS, '404.html'), distHtml);
 
 console.log('3. Staging and committing to main...');
 execSync('git add -A', { stdio: 'inherit' });
 try {
-  execSync('git commit -m "deploy: universal production bundle across root and docs"', { stdio: 'inherit' });
+  execSync('git commit -m "feat(animal-sound): add instant client-side bio-acoustic classifier and feedback to test sound buttons"', { stdio: 'inherit' });
 } catch (e) {
   console.log('No new changes to commit on main.');
 }
@@ -55,13 +58,13 @@ execSync('git push origin main', { stdio: 'inherit' });
 console.log('5. Switching to gh-pages...');
 execSync('git checkout gh-pages', { stdio: 'inherit' });
 
-console.log('6. Checking out docs, assets, crops, index.html from main into gh-pages...');
-execSync('git checkout main -- index.html 404.html .nojekyll assets docs crops', { stdio: 'inherit' });
+console.log('6. Checking out docs, assets, crops, audio, index.html from main into gh-pages...');
+execSync('git checkout main -- index.html 404.html .nojekyll assets docs crops audio', { stdio: 'inherit' });
 
 console.log('7. Staging and committing to gh-pages...');
 execSync('git add -A', { stdio: 'inherit' });
 try {
-  execSync('git commit -m "deploy: sync universal bundle on gh-pages"', { stdio: 'inherit' });
+  execSync('git commit -m "deploy: sync animal sound test sound results to gh-pages"', { stdio: 'inherit' });
 } catch (e) {
   console.log('No new changes to commit on gh-pages.');
 }

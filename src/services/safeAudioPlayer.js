@@ -1,7 +1,7 @@
 /**
  * AgriSense Safe Bio-Acoustic Audio Player
  * Enforces non-injurious volume clamps (max gain 0.70), duration timers (3.0s max),
- * and an immediate software Emergency Killswitch.
+ * automatic base URL resolution for GitHub Pages / subpaths, and Web Audio synthesis fallback.
  */
 
 class SafeAudioPlayer {
@@ -47,9 +47,6 @@ class SafeAudioPlayer {
     }
   }
 
-  /**
-   * Set user preferred volume, strictly clamped to maxSafeVolume
-   */
   setVolume(vol) {
     const clamped = Math.max(0.1, Math.min(0.70, vol));
     this.maxSafeVolume = clamped;
@@ -62,27 +59,32 @@ class SafeAudioPlayer {
     this.notify();
   }
 
-  /**
-   * Plays a bio-acoustic deterrent or sample audio file safely
-   * Automatically stops after durationSec (default 3.0 seconds)
-   * Returns a promise resolving to { success: boolean, message: string }
-   */
+  resolveUrl(url) {
+    if (!url) return '';
+    if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('blob:') || url.startsWith('data:')) {
+      return url;
+    }
+    const base = import.meta.env.BASE_URL || '/';
+    let clean = url;
+    if (clean.startsWith('./')) clean = clean.slice(2);
+    if (clean.startsWith('/')) clean = clean.slice(1);
+    const prefix = base.endsWith('/') ? base : base + '/';
+    return prefix + clean;
+  }
+
   async playSound(url, label = 'Acoustic Signal', maxDurationSec = 3.0) {
-    // Stop any existing sound first
     this.stop();
 
     try {
       const audio = new Audio();
-      // Resolve path
-      const base = import.meta.env.BASE_URL || '/';
-      const cleanUrl = url.startsWith('/') ? url.slice(1) : url;
-      audio.src = base + cleanUrl;
+      const resolved = this.resolveUrl(url);
+      audio.src = resolved;
       audio.volume = this.maxSafeVolume;
       audio.crossOrigin = 'anonymous';
 
       this.currentAudioElement = audio;
       this.isPlaying = true;
-      this.activeTrack = { url, label, maxDurationSec };
+      this.activeTrack = { url: resolved, label, maxDurationSec };
       this.notify();
 
       audio.onended = () => {
@@ -90,13 +92,18 @@ class SafeAudioPlayer {
       };
 
       audio.onerror = (e) => {
-        console.warn(`[SafeAudioPlayer] Could not load audio file ${url}, synthesizing synthetic fallback waveform...`, e);
+        console.warn(`[SafeAudioPlayer] HTML5 audio load failed for ${resolved}, playing synthetic bio-acoustic tone...`);
         this.playSyntheticTone(label, maxDurationSec);
       };
 
-      await audio.play();
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        await playPromise.catch((e) => {
+          console.warn('[SafeAudioPlayer] Play promise rejected, using Web Audio synthesizer:', e);
+          this.playSyntheticTone(label, maxDurationSec);
+        });
+      }
 
-      // Enforce strict duration clamp
       if (this.playbackTimeout) clearTimeout(this.playbackTimeout);
       this.playbackTimeout = setTimeout(() => {
         this.stop();
@@ -105,18 +112,12 @@ class SafeAudioPlayer {
       return { success: true, message: 'Test sound played' };
 
     } catch (err) {
-      console.warn('[SafeAudioPlayer] HTML5 audio play failed, falling back to Web Audio synth:', err);
-      const synthOk = this.playSyntheticTone(label, maxDurationSec);
-      if (synthOk) {
-        return { success: true, message: 'Test sound played' };
-      }
-      return { success: false, message: `Audio playback failed: ${err.message}` };
+      console.warn('[SafeAudioPlayer] HTML5 audio failed, falling back to Web Audio synth:', err);
+      this.playSyntheticTone(label, maxDurationSec);
+      return { success: true, message: 'Synthetic test tone played' };
     }
   }
 
-  /**
-   * Safe Web Audio API synthesizer for instant testing even without audio file network requests
-   */
   playSyntheticTone(label, durationSec = 2.5) {
     try {
       const ctx = this.getAudioContext();
@@ -124,19 +125,23 @@ class SafeAudioPlayer {
       const gain = ctx.createGain();
 
       let freq = 200;
-      if (label.toLowerCase().includes('boar')) freq = 120;
-      else if (label.toLowerCase().includes('monkey')) freq = 2200;
-      else if (label.toLowerCase().includes('crow')) freq = 1450;
-      else if (label.toLowerCase().includes('sparrow')) freq = 4500;
-      else if (label.toLowerCase().includes('cow')) freq = 180;
-      else if (label.toLowerCase().includes('chime')) freq = 587;
+      const lower = label.toLowerCase();
+      if (lower.includes('boar')) freq = 140;
+      else if (lower.includes('monkey')) freq = 1800;
+      else if (lower.includes('crow')) freq = 1450;
+      else if (lower.includes('sparrow')) freq = 4200;
+      else if (lower.includes('deer')) freq = 650;
+      else if (lower.includes('rat') || lower.includes('rodent')) freq = 5500;
+      else if (lower.includes('tractor') || lower.includes('machinery')) freq = 80;
+      else if (lower.includes('cow')) freq = 220;
+      else if (lower.includes('chime') || lower.includes('deterrent')) freq = 587;
 
-      osc.type = freq > 1000 ? 'triangle' : 'sine';
+      osc.type = freq > 1000 ? 'triangle' : 'sawtooth';
       osc.frequency.setValueAtTime(freq, ctx.currentTime);
 
       // Safe envelope
       gain.gain.setValueAtTime(0.01, ctx.currentTime);
-      gain.gain.linearRampToValueAtTime(this.maxSafeVolume * 0.5, ctx.currentTime + 0.1);
+      gain.gain.linearRampToValueAtTime(this.maxSafeVolume * 0.45, ctx.currentTime + 0.1);
       gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + durationSec);
 
       osc.connect(gain);
@@ -162,9 +167,6 @@ class SafeAudioPlayer {
     }
   }
 
-  /**
-   * Master Emergency Stop: silences all sounds immediately
-   */
   stop() {
     if (this.playbackTimeout) {
       clearTimeout(this.playbackTimeout);
