@@ -11,7 +11,8 @@ import {
   UploadCloud,
   RefreshCw,
   VideoOff,
-  ShieldAlert
+  ShieldAlert,
+  ScanLine
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { analyzePlantImage, detectPlantLeaves } from '../../services/plantDiseaseService';
@@ -25,6 +26,7 @@ export default function CameraScanner({ onCapture, onClose, onSwitchToUpload }) 
   const isMountedRef = useRef(true);
   const initIdRef = useRef(0);
   const isDetectingRef = useRef(false);
+  const isAnalyzingRef = useRef(false);
 
   // Component State
   // Status: 'requesting' | 'starting' | 'ready' | 'error'
@@ -43,10 +45,17 @@ export default function CameraScanner({ onCapture, onClose, onSwitchToUpload }) 
   const [scanError, setScanError] = useState(null);
   const [analysisStep, setAnalysisStep] = useState(1);
 
-  // Real YOLOv8 Object Detection State
+  // Real-Time YOLOv8 & On-Device Object Detection State
   const [liveDetections, setLiveDetections] = useState([]);
   const [isLiveDetectEnabled, setIsLiveDetectEnabled] = useState(true);
   const [personWarning, setPersonWarning] = useState(null);
+
+  // Auto-Scan & Reticle Center Detection State
+  const [autoScanEnabled, setAutoScanEnabled] = useState(true);
+  const [isLeafCentered, setIsLeafCentered] = useState(false);
+  const [autoScanProgress, setAutoScanProgress] = useState(0);
+  const centeredStartTimeRef = useRef(null);
+  const autoScanTriggeredRef = useRef(false);
 
   // Stop all active camera tracks cleanly without triggering re-render loops
   const stopActiveStream = useCallback(() => {
@@ -138,7 +147,6 @@ export default function CameraScanner({ onCapture, onClose, onSwitchToUpload }) 
 
     // 3. Multi-Tier Constraint Negotiation
     const constraintTiers = [
-      // Tier 1: Prefer requested facingMode with standard 720p resolution
       {
         video: {
           facingMode: { ideal: preferredFacing },
@@ -147,14 +155,12 @@ export default function CameraScanner({ onCapture, onClose, onSwitchToUpload }) 
         },
         audio: false
       },
-      // Tier 2: Prefer requested facingMode with default resolution
       {
         video: {
           facingMode: { ideal: preferredFacing }
         },
         audio: false
       },
-      // Tier 3: Any available video device
       {
         video: true,
         audio: false
@@ -172,14 +178,12 @@ export default function CameraScanner({ onCapture, onClose, onSwitchToUpload }) 
         if (mediaStream) break;
       } catch (err) {
         finalError = err;
-        // If permission was explicitly denied, do not loop through further tiers
         if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
           break;
         }
       }
     }
 
-    // If cancelled or unmounted while awaiting getUserMedia, release stream immediately
     if (thisInitId !== initIdRef.current || !isMountedRef.current) {
       if (mediaStream) {
         mediaStream.getTracks().forEach(track => track.stop());
@@ -187,18 +191,15 @@ export default function CameraScanner({ onCapture, onClose, onSwitchToUpload }) 
       return;
     }
 
-    // If all tiers failed, show categorized error
     if (!mediaStream) {
       setCameraStatus('error');
       categorizeCameraError(finalError);
       return;
     }
 
-    // Stream successfully acquired
     activeStreamRef.current = mediaStream;
     setCameraStatus('starting');
 
-    // Inspect video track capabilities (torch, facingMode)
     try {
       const videoTrack = mediaStream.getVideoTracks()[0];
       const capabilities = videoTrack?.getCapabilities ? videoTrack.getCapabilities() : {};
@@ -207,7 +208,6 @@ export default function CameraScanner({ onCapture, onClose, onSwitchToUpload }) 
       setHasTorch(false);
     }
 
-    // Enumerate available video inputs to check if multiple cameras exist
     try {
       if (navigator.mediaDevices.enumerateDevices) {
         const devices = await navigator.mediaDevices.enumerateDevices();
@@ -220,13 +220,11 @@ export default function CameraScanner({ onCapture, onClose, onSwitchToUpload }) 
       // Ignore enumeration failure
     }
 
-    // Attach stream to video element
     const video = videoRef.current;
     if (!video) return;
 
     video.srcObject = mediaStream;
 
-    // Helper to confirm video has valid dimensions and frames
     const markVideoReady = () => {
       if (thisInitId !== initIdRef.current || !isMountedRef.current) return;
       if (video.videoWidth > 0 && video.videoHeight > 0) {
@@ -238,21 +236,18 @@ export default function CameraScanner({ onCapture, onClose, onSwitchToUpload }) 
       }
     };
 
-    // Safely trigger video playback without unhandled promise rejection
     try {
       await video.play();
       if (video.videoWidth > 0) {
         markVideoReady();
       }
     } catch (playErr) {
-      // AbortError is benign if stream was reloaded or replaced
       if (playErr.name !== 'AbortError') {
         console.warn('AgriSense: Video element play notice:', playErr);
       }
     }
   }, [categorizeCameraError, stopActiveStream, t]);
 
-  // Video metadata event listener
   const handleVideoMetadata = () => {
     const video = videoRef.current;
     if (video && video.videoWidth > 0 && video.videoHeight > 0) {
@@ -264,7 +259,6 @@ export default function CameraScanner({ onCapture, onClose, onSwitchToUpload }) 
     }
   };
 
-  // Mount effect to start camera and cleanup on unmount
   useEffect(() => {
     isMountedRef.current = true;
     startCamera(facingMode);
@@ -276,7 +270,6 @@ export default function CameraScanner({ onCapture, onClose, onSwitchToUpload }) 
     };
   }, [facingMode, startCamera, stopActiveStream]);
 
-  // Listen for Escape key to close modal
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') {
@@ -288,17 +281,73 @@ export default function CameraScanner({ onCapture, onClose, onSwitchToUpload }) 
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose, stopActiveStream]);
 
-  // Real-Time YOLO Plant Leaf Object Detection Loop
+  // Instant High-Resolution Capture and Direct Disease Diagnosis
+  const handleInstantScan = useCallback(async (forceAnalysis = false) => {
+    const video = videoRef.current;
+    if (!video || video.videoWidth === 0 || isAnalyzingRef.current) return;
+
+    isAnalyzingRef.current = true;
+    setIsAnalyzing(true);
+    setScanError(null);
+    setAnalysisStep(1);
+
+    try {
+      const width = video.videoWidth;
+      const height = video.videoHeight;
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (facingMode === 'user') {
+        ctx.translate(width, 0);
+        ctx.scale(-1, 1);
+      }
+      ctx.drawImage(video, 0, 0, width, height);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+
+      setCapturedImage(dataUrl);
+
+      // Stop camera hardware stream cleanly during analysis
+      stopActiveStream();
+
+      const timer1 = setTimeout(() => setAnalysisStep(2), 300);
+      const timer2 = setTimeout(() => setAnalysisStep(3), 600);
+
+      const result = await analyzePlantImage(dataUrl, null, { forceAnalysis });
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+
+      if (result && result.success) {
+        setIsAnalyzing(false);
+        isAnalyzingRef.current = false;
+        onCapture(dataUrl, result);
+        onClose();
+      } else {
+        setIsAnalyzing(false);
+        isAnalyzingRef.current = false;
+        setScanError(result?.error || t('plantHealth.cameraGenericError', 'Failed to assess leaf specimen. Please ensure leaf is in sharp focus.'));
+      }
+    } catch (err) {
+      setIsAnalyzing(false);
+      isAnalyzingRef.current = false;
+      setScanError(err.message || 'Image analysis failed. Please retry.');
+    }
+  }, [facingMode, onCapture, onClose, stopActiveStream, t]);
+
+  // Real-Time YOLO & On-Device Plant Leaf Detection Loop with Auto-Scan Trigger
   useEffect(() => {
     if (cameraStatus !== 'ready' || capturedImage || !isLiveDetectEnabled) {
       setLiveDetections([]);
       setPersonWarning(null);
+      setIsLeafCentered(false);
+      centeredStartTimeRef.current = null;
+      setAutoScanProgress(0);
       return;
     }
 
     const intervalId = setInterval(async () => {
       const video = videoRef.current;
-      if (!video || video.videoWidth === 0 || isDetectingRef.current) return;
+      if (!video || video.videoWidth === 0 || isDetectingRef.current || isAnalyzingRef.current) return;
 
       isDetectingRef.current = true;
       try {
@@ -321,8 +370,38 @@ export default function CameraScanner({ onCapture, onClose, onSwitchToUpload }) 
           setLiveDetections(res.detections || []);
           if (res.has_person && !res.has_leaves) {
             setPersonWarning(t('plantHealth.personAlert', 'Person detected in viewfinder. Please aim camera at a plant leaf.'));
+            setIsLeafCentered(false);
+            centeredStartTimeRef.current = null;
+            setAutoScanProgress(0);
           } else {
             setPersonWarning(null);
+
+            // Check if leaf is centered in the central reticle
+            const isCentered = Boolean(res.is_centered) || (res.has_leaves && res.detections?.some(d => !d.is_person && d.is_centered));
+
+            if (isCentered) {
+              setIsLeafCentered(true);
+              const now = Date.now();
+              if (!centeredStartTimeRef.current) {
+                centeredStartTimeRef.current = now;
+                autoScanTriggeredRef.current = false;
+                setAutoScanProgress(20);
+              } else {
+                const elapsed = now - centeredStartTimeRef.current;
+                const progress = Math.min(100, Math.round((elapsed / 1100) * 100));
+                setAutoScanProgress(progress);
+
+                // Auto-scan fires after holding steady for ~1.1 seconds!
+                if (autoScanEnabled && elapsed >= 1100 && !autoScanTriggeredRef.current && !isAnalyzingRef.current) {
+                  autoScanTriggeredRef.current = true;
+                  handleInstantScan(false);
+                }
+              }
+            } else {
+              setIsLeafCentered(false);
+              centeredStartTimeRef.current = null;
+              setAutoScanProgress(0);
+            }
           }
         }
       } catch (err) {
@@ -330,17 +409,15 @@ export default function CameraScanner({ onCapture, onClose, onSwitchToUpload }) 
       } finally {
         isDetectingRef.current = false;
       }
-    }, 950);
+    }, 450);
 
     return () => clearInterval(intervalId);
-  }, [cameraStatus, capturedImage, isLiveDetectEnabled, facingMode, t]);
+  }, [cameraStatus, capturedImage, isLiveDetectEnabled, autoScanEnabled, facingMode, handleInstantScan, t]);
 
-  // Switch between front and rear cameras
   const handleToggleFacingMode = () => {
     setFacingMode(prev => (prev === 'environment' ? 'user' : 'environment'));
   };
 
-  // Toggle torch / flash if supported by mobile hardware
   const handleToggleTorch = async () => {
     if (!activeStreamRef.current) return;
     const track = activeStreamRef.current.getVideoTracks()[0];
@@ -356,11 +433,10 @@ export default function CameraScanner({ onCapture, onClose, onSwitchToUpload }) 
     }
   };
 
-  // High-precision leaf frame capture
+  // High-precision leaf frame capture for still review mode
   const handleCapture = () => {
     const video = videoRef.current;
     if (!video || video.videoWidth === 0 || video.videoHeight === 0) {
-      console.warn('AgriSense: Frame capture rejected — video frame not ready.');
       return;
     }
 
@@ -370,31 +446,22 @@ export default function CameraScanner({ onCapture, onClose, onSwitchToUpload }) 
       const canvas = document.createElement('canvas');
       canvas.width = width;
       canvas.height = height;
-
       const ctx = canvas.getContext('2d');
 
-      // Mirror front-facing user camera preview so captured image matches viewfinder
       if (facingMode === 'user') {
         ctx.translate(width, 0);
         ctx.scale(-1, 1);
       }
 
       ctx.drawImage(video, 0, 0, width, height);
-
       const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
 
-      if (!dataUrl || dataUrl.length < 500) {
-        console.warn('AgriSense: Frame capture produced invalid dataUrl.');
-        return;
-      }
+      if (!dataUrl || dataUrl.length < 500) return;
 
-      // Stop camera hardware tracks immediately while user reviews photo
       stopActiveStream();
-
       setCapturedImage(dataUrl);
       setScanError(null);
 
-      // Run high-resolution YOLO detection on captured frame for review boxes
       detectPlantLeaves(dataUrl).then(res => {
         if (res && res.success) {
           setLiveDetections(res.detections || []);
@@ -417,13 +484,19 @@ export default function CameraScanner({ onCapture, onClose, onSwitchToUpload }) 
     setPersonWarning(null);
     setScanError(null);
     setIsAnalyzing(false);
+    isAnalyzingRef.current = false;
+    setIsLeafCentered(false);
+    centeredStartTimeRef.current = null;
+    autoScanTriggeredRef.current = false;
+    setAutoScanProgress(0);
     startCamera(facingMode);
   };
 
-  // Run AI leaf disease analysis directly inside the scanner preview
+  // Analyze already captured leaf photo
   const handleAnalyzeLeaf = async (forceAnalysis = false) => {
-    if (!capturedImage) return;
+    if (!capturedImage || isAnalyzingRef.current) return;
 
+    isAnalyzingRef.current = true;
     setIsAnalyzing(true);
     setScanError(null);
     setAnalysisStep(1);
@@ -439,8 +512,10 @@ export default function CameraScanner({ onCapture, onClose, onSwitchToUpload }) 
       if (!result.success && !forceAnalysis) {
         setScanError(result.error || t('plantHealth.cameraGenericError', 'Failed to assess leaf specimen.'));
         setIsAnalyzing(false);
+        isAnalyzingRef.current = false;
       } else {
         setIsAnalyzing(false);
+        isAnalyzingRef.current = false;
         stopActiveStream();
         onCapture(capturedImage, result);
         onClose();
@@ -450,17 +525,15 @@ export default function CameraScanner({ onCapture, onClose, onSwitchToUpload }) 
       clearTimeout(stepTimer2);
       setScanError(err.message || 'Image analysis failed. Please retry.');
       setIsAnalyzing(false);
+      isAnalyzingRef.current = false;
     }
   };
 
-
-  // Close scanner cleanly
   const handleClose = () => {
     stopActiveStream();
     onClose();
   };
 
-  // Switch to upload photo fallback
   const handleSwitchToUpload = () => {
     stopActiveStream();
     if (onSwitchToUpload) {
@@ -471,10 +544,10 @@ export default function CameraScanner({ onCapture, onClose, onSwitchToUpload }) 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="relative w-full max-w-2xl bg-slate-900 rounded-3xl shadow-2xl border border-emerald-900/40 overflow-hidden flex flex-col max-h-[92vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-5 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200">
+      <div className="relative w-full max-w-2xl bg-slate-900 rounded-3xl shadow-2xl border border-emerald-900/40 overflow-hidden flex flex-col max-h-[95vh]">
         {/* Header */}
-        <div className="p-4 sm:p-5 flex items-center justify-between border-b border-slate-800 bg-slate-900/90 text-white z-20">
+        <div className="p-3.5 sm:p-4 flex items-center justify-between border-b border-slate-800 bg-slate-900/95 text-white z-20">
           <div className="flex items-center space-x-2.5">
             <div className="w-8 h-8 rounded-xl bg-emerald-600 flex items-center justify-center text-white shrink-0">
               <Camera className="w-4 h-4" />
@@ -491,26 +564,42 @@ export default function CameraScanner({ onCapture, onClose, onSwitchToUpload }) 
                   </span>
                 )}
               </div>
-              <p className="text-[11px] text-emerald-400">
+              <p className="text-[11px] text-emerald-400 hidden xs:block">
                 {t('plantHealth.holdPhone', 'Hold phone steady 15-25cm above affected leaf blade')}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center space-x-2">
-            {/* YOLOv8 Live Detection Toggle Button */}
+          <div className="flex items-center space-x-1.5 sm:space-x-2">
+            {/* Auto-Scan Toggle Switch */}
             {!capturedImage && cameraStatus === 'ready' && (
               <button
-                onClick={() => setIsLiveDetectEnabled(!isLiveDetectEnabled)}
-                className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-1.5 ${
-                  isLiveDetectEnabled
+                onClick={() => setAutoScanEnabled(!autoScanEnabled)}
+                className={`px-2 sm:px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition-all cursor-pointer flex items-center space-x-1 ${
+                  autoScanEnabled
                     ? 'bg-emerald-600/30 text-emerald-300 border border-emerald-500/50 shadow-xs'
                     : 'bg-slate-800 text-slate-400 border border-slate-700 hover:text-white'
                 }`}
-                title={isLiveDetectEnabled ? 'Pause YOLOv8 Live Detection' : 'Resume YOLOv8 Live Detection'}
+                title={autoScanEnabled ? 'Auto-Scan enabled: Scans automatically when leaf is centered' : 'Auto-Scan paused: Tap scan button manually'}
               >
-                <span className={`w-2 h-2 rounded-full ${isLiveDetectEnabled ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
-                <span>YOLO: {isLiveDetectEnabled ? 'LIVE' : 'PAUSED'}</span>
+                <span className={`w-2 h-2 rounded-full ${autoScanEnabled ? 'bg-emerald-400 animate-ping' : 'bg-slate-500'}`} />
+                <span>Auto-Scan: {autoScanEnabled ? 'ON' : 'OFF'}</span>
+              </button>
+            )}
+
+            {/* YOLOv8 Live Detection Toggle */}
+            {!capturedImage && cameraStatus === 'ready' && (
+              <button
+                onClick={() => setIsLiveDetectEnabled(!isLiveDetectEnabled)}
+                className={`hidden md:flex px-2 py-1.5 rounded-xl text-[11px] font-bold transition-all cursor-pointer items-center space-x-1 ${
+                  isLiveDetectEnabled
+                    ? 'bg-slate-800 text-emerald-400 border border-emerald-800/60'
+                    : 'bg-slate-800 text-slate-400 border border-slate-700 hover:text-white'
+                }`}
+                title={isLiveDetectEnabled ? 'YOLO Live Detection Active' : 'YOLO Detection Paused'}
+              >
+                <span className={`w-1.5 h-1.5 rounded-full ${isLiveDetectEnabled ? 'bg-emerald-400' : 'bg-slate-500'}`} />
+                <span>YOLO</span>
               </button>
             )}
 
@@ -550,7 +639,7 @@ export default function CameraScanner({ onCapture, onClose, onSwitchToUpload }) 
         </div>
 
         {/* Viewport Area */}
-        <div className="relative flex-1 bg-black min-h-[360px] sm:min-h-[440px] flex items-center justify-center overflow-hidden">
+        <div className="relative flex-1 bg-black min-h-[380px] sm:min-h-[460px] flex items-center justify-center overflow-hidden">
           {/* 1. Requesting Permission State */}
           {cameraStatus === 'requesting' && !capturedImage && (
             <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-xs flex flex-col items-center justify-center p-6 text-white text-center space-y-4 z-10 animate-in fade-in duration-150">
@@ -587,7 +676,7 @@ export default function CameraScanner({ onCapture, onClose, onSwitchToUpload }) 
             </div>
           )}
 
-          {/* 3. Camera Error / Blocked States with Direct Actions */}
+          {/* 3. Camera Error / Blocked States */}
           {cameraStatus === 'error' && (
             <div className="p-6 text-center max-w-md text-white space-y-4 z-10 animate-in fade-in duration-200">
               <div className="w-14 h-14 rounded-2xl bg-rose-500/10 text-rose-400 flex items-center justify-center mx-auto border border-rose-500/20">
@@ -616,16 +705,6 @@ export default function CameraScanner({ onCapture, onClose, onSwitchToUpload }) 
                   {errorMessage}
                 </p>
               </div>
-
-              {/* Helpful tips depending on error */}
-              {errorType === 'permission_denied' && (
-                <div className="p-3 bg-slate-800/80 rounded-xl text-[11px] text-slate-300 text-left space-y-1 border border-slate-700">
-                  <strong className="block text-emerald-400 font-semibold">How to grant permission:</strong>
-                  <p>1. Click the lock / settings icon next to the address bar.</p>
-                  <p>2. Set <strong>Camera</strong> to <strong>Allow</strong>.</p>
-                  <p>3. Tap "Try Again" below.</p>
-                </div>
-              )}
 
               <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 pt-2">
                 <button
@@ -662,7 +741,7 @@ export default function CameraScanner({ onCapture, onClose, onSwitchToUpload }) 
                 } ${facingMode === 'user' ? 'scale-x-[-1]' : ''}`}
               />
 
-              {/* Real-Time YOLOv8 Plant & Leaf Bounding Boxes */}
+              {/* Real-Time YOLOv8 & On-Device Plant & Leaf Bounding Boxes */}
               {cameraStatus === 'ready' && isLiveDetectEnabled && liveDetections && liveDetections.length > 0 && (
                 <div className="absolute inset-0 pointer-events-none overflow-hidden z-10">
                   {liveDetections.map((det, idx) => {
@@ -676,10 +755,10 @@ export default function CameraScanner({ onCapture, onClose, onSwitchToUpload }) 
                     return (
                       <div
                         key={det.id || idx}
-                        className={`absolute rounded-xl transition-all duration-150 pointer-events-none ${
+                        className={`absolute rounded-2xl transition-all duration-150 pointer-events-none ${
                           isPerson
                             ? 'border-2 border-amber-400 bg-amber-500/10'
-                            : 'border-2 border-emerald-400 bg-emerald-500/15 shadow-md shadow-emerald-500/20'
+                            : 'border-2 border-emerald-400 bg-emerald-500/15 shadow-md shadow-emerald-500/30'
                         }`}
                         style={{
                           left: `${box.x}%`,
@@ -714,31 +793,80 @@ export default function CameraScanner({ onCapture, onClose, onSwitchToUpload }) 
                 </div>
               )}
 
-              {/* Agronomic Target Reticle (Only visible when camera is ready) */}
+              {/* Agronomic Target Reticle with Auto-Scan Lock & Progress Feedback */}
               {cameraStatus === 'ready' && (
-                <div className="absolute inset-0 pointer-events-none flex items-center justify-center p-6 select-none">
-                  <div className="relative w-64 h-64 sm:w-80 sm:h-80 border-2 border-emerald-400/40 rounded-3xl transition-all">
+                <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center p-4 select-none">
+                  <div className={`relative w-64 h-64 sm:w-76 sm:h-76 rounded-3xl transition-all duration-200 ${
+                    isLeafCentered
+                      ? 'border-3 border-emerald-400 ring-4 ring-emerald-500/40 shadow-2xl shadow-emerald-500/50 scale-[1.02]'
+                      : 'border-2 border-emerald-400/40'
+                  }`}>
                     {/* Corner Target Markers */}
-                    <div className="absolute -top-1 -left-1 w-6 h-6 border-t-4 border-l-4 border-emerald-400 rounded-tl-xl shadow-xs" />
-                    <div className="absolute -top-1 -right-1 w-6 h-6 border-t-4 border-r-4 border-emerald-400 rounded-tr-xl shadow-xs" />
-                    <div className="absolute -bottom-1 -left-1 w-6 h-6 border-b-4 border-l-4 border-emerald-400 rounded-bl-xl shadow-xs" />
-                    <div className="absolute -bottom-1 -right-1 w-6 h-6 border-b-4 border-r-4 border-emerald-400 rounded-br-xl shadow-xs" />
+                    <div className={`absolute -top-1 -left-1 w-6 h-6 border-t-4 border-l-4 rounded-tl-xl transition-all ${
+                      isLeafCentered ? 'border-emerald-300 shadow-md shadow-emerald-400/80' : 'border-emerald-400'
+                    }`} />
+                    <div className={`absolute -top-1 -right-1 w-6 h-6 border-t-4 border-r-4 rounded-tr-xl transition-all ${
+                      isLeafCentered ? 'border-emerald-300 shadow-md shadow-emerald-400/80' : 'border-emerald-400'
+                    }`} />
+                    <div className={`absolute -bottom-1 -left-1 w-6 h-6 border-b-4 border-l-4 rounded-bl-xl transition-all ${
+                      isLeafCentered ? 'border-emerald-300 shadow-md shadow-emerald-400/80' : 'border-emerald-400'
+                    }`} />
+                    <div className={`absolute -bottom-1 -right-1 w-6 h-6 border-b-4 border-r-4 rounded-br-xl transition-all ${
+                      isLeafCentered ? 'border-emerald-300 shadow-md shadow-emerald-400/80' : 'border-emerald-400'
+                    }`} />
 
-                    {/* Subtle scanning laser line */}
-                    <div className="absolute inset-x-3 top-0 h-0.5 bg-gradient-to-r from-transparent via-emerald-400 to-transparent animate-pulse shadow-md shadow-emerald-400/50" />
+                    {/* Auto-Scan Progress Bar (fills up when leaf is centered) */}
+                    {isLeafCentered && autoScanEnabled && autoScanProgress > 0 && (
+                      <div className="absolute -top-3.5 inset-x-6 h-2 bg-slate-950/90 rounded-full overflow-hidden border border-emerald-400/60 shadow-lg">
+                        <div
+                          className="h-full bg-gradient-to-r from-emerald-400 via-green-300 to-emerald-200 transition-all duration-100 ease-out"
+                          style={{ width: `${autoScanProgress}%` }}
+                        />
+                      </div>
+                    )}
+
+                    {/* Scanning Laser Line */}
+                    <div className={`absolute inset-x-3 top-0 h-0.5 bg-gradient-to-r from-transparent via-emerald-400 to-transparent shadow-md shadow-emerald-400/50 ${
+                      isLeafCentered ? 'animate-bounce' : 'animate-pulse'
+                    }`} />
 
                     {/* Centered Crosshair */}
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-40">
-                      <div className="w-6 h-0.5 bg-emerald-400" />
-                      <div className="h-6 w-0.5 bg-emerald-400 -ml-3" />
+                    <div className={`absolute inset-0 flex items-center justify-center pointer-events-none transition-opacity ${
+                      isLeafCentered ? 'opacity-80' : 'opacity-40'
+                    }`}>
+                      <div className="w-7 h-0.5 bg-emerald-400" />
+                      <div className="h-7 w-0.5 bg-emerald-400 -ml-3.5" />
                     </div>
 
-                    <span className="absolute -bottom-9 left-1/2 -translate-x-1/2 text-[11px] font-semibold text-emerald-300 bg-slate-900/90 px-3.5 py-1 rounded-full whitespace-nowrap border border-emerald-500/30 shadow-md">
-                      {t('plantHealth.centerLeaf', 'Center Leaf in Frame')}
-                    </span>
+                    {/* Reticle Status Badge */}
+                    {isLeafCentered ? (
+                      <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 flex items-center space-x-1.5 bg-emerald-950/95 text-emerald-200 border border-emerald-400/80 px-4 py-1.5 rounded-full shadow-2xl whitespace-nowrap text-xs font-bold animate-in zoom-in-95 duration-150">
+                        <Sparkles className="w-3.5 h-3.5 text-emerald-300 animate-spin" />
+                        <span>
+                          {autoScanEnabled
+                            ? `🌿 Leaf Locked • Scanning in ${Math.max(1, Math.ceil((100 - autoScanProgress) / 70))}s...`
+                            : '🌿 Leaf Locked • Ready to Diagnose'}
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="absolute -bottom-9 left-1/2 -translate-x-1/2 text-[11px] font-semibold text-emerald-300 bg-slate-900/90 px-3.5 py-1 rounded-full whitespace-nowrap border border-emerald-500/30 shadow-md">
+                        {t('plantHealth.centerLeaf', 'Center Leaf in Frame')}
+                      </span>
+                    )}
                   </div>
 
-                  {/* Real-time Hardware Stream Badge */}
+                  {/* Prominent Floating "Scan Leaf Now" Shutter Button (Right in Viewport) */}
+                  <div className="mt-14 pointer-events-auto z-20">
+                    <button
+                      onClick={() => handleInstantScan(false)}
+                      className="flex items-center space-x-2 px-6 py-2.5 rounded-full bg-gradient-to-r from-emerald-500 via-emerald-600 to-green-600 hover:from-emerald-400 hover:to-green-500 text-white font-extrabold text-xs sm:text-sm shadow-xl shadow-emerald-600/50 border border-emerald-300/50 hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                    >
+                      <Sparkles className="w-4 h-4 text-emerald-200 animate-pulse" />
+                      <span>{t('plantHealth.scanDiagnoseNow', 'Scan & Diagnose Leaf Now')}</span>
+                    </button>
+                  </div>
+
+                  {/* Hardware Stream Resolution Badge */}
                   {videoDimensions.width > 0 && (
                     <div className="absolute top-4 left-4 bg-slate-950/80 backdrop-blur-xs text-[10px] font-mono text-emerald-300 px-2.5 py-1 rounded-md border border-emerald-500/30 flex items-center space-x-1.5">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
@@ -752,7 +880,7 @@ export default function CameraScanner({ onCapture, onClose, onSwitchToUpload }) 
             </>
           )}
 
-          {/* 5. Captured Leaf Inspection Review */}
+          {/* 5. Captured Leaf Inspection Review / Analyzing State */}
           {capturedImage && (
             <div className="relative w-full h-full flex items-center justify-center bg-black animate-in fade-in duration-200 overflow-hidden">
               <div className="relative max-h-[70vh] flex items-center justify-center">
@@ -762,7 +890,7 @@ export default function CameraScanner({ onCapture, onClose, onSwitchToUpload }) 
                   className="max-h-[70vh] w-auto object-contain rounded-xl shadow-2xl block"
                 />
 
-                {/* YOLO Bounding Boxes Over Captured Leaf */}
+                {/* YOLO / On-Device Bounding Boxes Over Captured Leaf */}
                 {liveDetections && liveDetections.map((det, idx) => {
                   const box = det.box_percent || {
                     x: det.x || 0,
@@ -805,7 +933,7 @@ export default function CameraScanner({ onCapture, onClose, onSwitchToUpload }) 
                   <Check className="w-3.5 h-3.5 text-emerald-300 shrink-0" />
                   <span>
                     {liveDetections && liveDetections.filter(d => !d.is_person && d.class_name !== 'person').length > 0
-                      ? `${liveDetections.filter(d => !d.is_person && d.class_name !== 'person').length} Leaf Region(s) Localized by YOLOv8 — Ready for Analysis`
+                      ? `${liveDetections.filter(d => !d.is_person && d.class_name !== 'person').length} Leaf Region(s) Localized — Ready for Diagnosis`
                       : t('plantHealth.sampleCaptured', 'Sample Captured — Ready for Inspection')}
                   </span>
                 </div>
@@ -879,21 +1007,32 @@ export default function CameraScanner({ onCapture, onClose, onSwitchToUpload }) 
         </div>
 
         {/* Footer Actions */}
-        <div className="p-4 sm:p-5 bg-slate-900 border-t border-slate-800 flex items-center justify-between z-20">
+        <div className="p-3.5 sm:p-4 bg-slate-900 border-t border-slate-800 flex items-center justify-between z-20">
           {!capturedImage ? (
             <div className="w-full flex items-center justify-between">
               <span className="text-xs text-slate-400 hidden sm:inline">
-                {t('plantHealth.daylightHint', 'Natural daylight provides highest classification accuracy')}
+                {t('plantHealth.daylightHint', 'Hold leaf centered in box to auto-scan or tap Scan button')}
               </span>
-              <button
-                onClick={handleCapture}
-                disabled={cameraStatus !== 'ready'}
-                className="mx-auto sm:mx-0 flex items-center space-x-2 px-6 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm shadow-lg shadow-emerald-700/30 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                <div className={`w-3.5 h-3.5 rounded-full bg-white ${cameraStatus === 'ready' ? 'animate-ping' : ''} mr-1`} />
-                <Camera className="w-4 h-4 text-emerald-100" />
-                <span>{t('plantHealth.capturePhoto', 'Capture Leaf Photo')}</span>
-              </button>
+              <div className="flex items-center space-x-2.5 mx-auto sm:mx-0">
+                <button
+                  onClick={handleCapture}
+                  disabled={cameraStatus !== 'ready'}
+                  className="flex items-center space-x-1.5 px-3.5 py-2.5 rounded-xl border border-slate-700 hover:bg-slate-800 text-slate-300 text-xs font-semibold transition-colors cursor-pointer disabled:opacity-40"
+                  title="Capture Still Frame First"
+                >
+                  <Camera className="w-3.5 h-3.5 text-slate-400" />
+                  <span className="hidden xs:inline">Snap Still</span>
+                </button>
+
+                <button
+                  onClick={() => handleInstantScan(false)}
+                  disabled={cameraStatus !== 'ready' || isAnalyzing}
+                  className="flex items-center space-x-2 px-6 py-2.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-white font-bold text-xs sm:text-sm shadow-lg shadow-emerald-700/40 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed hover:scale-[1.02] active:scale-[0.98]"
+                >
+                  <Sparkles className="w-4 h-4 text-emerald-200" />
+                  <span>{t('plantHealth.scanDiagnoseNow', 'Scan & Diagnose Leaf')}</span>
+                </button>
+              </div>
             </div>
           ) : (
             <div className="w-full flex items-center justify-between space-x-3">

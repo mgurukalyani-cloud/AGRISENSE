@@ -1436,7 +1436,7 @@ export const PLANTVILLAGE_LABEL_MAP = {
   'Cotton___healthy': 'healthy_leaf'
 };
 
-const BASE_PATH = import.meta.env.BASE_URL || '/';
+const BASE_PATH = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL) || '/';
 const getAssetUrl = (p) => `${BASE_PATH.replace(/\/$/, '')}/${p.replace(/^\//, '')}`;
 
 /**
@@ -1573,29 +1573,233 @@ export async function checkCvBackendHealth() {
 /**
  * Real-Time Plant Leaf Object Detection using YOLOv8 via Computer Vision Backend
  */
-export async function detectPlantLeaves(imageSource) {
-  try {
-    const formData = new FormData();
-    if (typeof imageSource === 'string' && imageSource.startsWith('data:')) {
-      formData.append('image', imageSource);
-    } else {
-      const blob = await fetch(imageSource).then(r => r.blob());
-      formData.append('file', blob, 'frame.jpg');
-    }
-
-    const res = await fetch(`${CV_BACKEND_URL}/api/detect`, {
-      method: 'POST',
-      body: formData,
-      signal: AbortSignal.timeout(4000)
-    });
-
-    if (res.ok) {
-      return await res.json();
-    }
-  } catch (err) {
-    console.debug('AgriSense: Live YOLO frame detection request error/timeout:', err);
+/**
+ * Autonomous On-Device Agro-Vision Fast Leaf Detector
+ * Evaluates vegetative foliar pixels (chlorophyll ExG, chlorosis, necrosis)
+ * and determines leaf presence, bounding box, centering, and confidence.
+ */
+export async function detectLeavesOnDevice(imageSource) {
+  if (typeof document === 'undefined') {
+    return { success: false, detections: [], leaf_count: 0, has_leaves: false, has_person: false, is_centered: false };
   }
-  return { success: false, detections: [], leaf_count: 0, has_leaves: false, has_person: false };
+
+  return new Promise((resolve) => {
+    try {
+      const processImageData = (imgElement) => {
+        try {
+          const w = 160;
+          const h = 120;
+          const canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d', { willReadFrequently: true });
+          if (!ctx) {
+            resolve({ success: false, detections: [], leaf_count: 0, has_leaves: false, has_person: false, is_centered: false });
+            return;
+          }
+          ctx.drawImage(imgElement, 0, 0, w, h);
+          const imgData = ctx.getImageData(0, 0, w, h).data;
+
+          let leafPixels = 0;
+          let skinPixels = 0;
+          let minX = w, minY = h, maxX = 0, maxY = 0;
+          let centerFoliage = 0;
+
+          // Central 60% reticle area in normalized coordinates
+          const cxMin = Math.floor(w * 0.20);
+          const cxMax = Math.floor(w * 0.80);
+          const cyMin = Math.floor(h * 0.15);
+          const cyMax = Math.floor(h * 0.85);
+          const totalCenterPx = (cxMax - cxMin) * (cyMax - cyMin);
+
+          for (let y = 0; y < h; y++) {
+            for (let x = 0; x < w; x++) {
+              const idx = (y * w + x) * 4;
+              const r = imgData[idx];
+              const g = imgData[idx + 1];
+              const b = imgData[idx + 2];
+
+              // Fast RGB to HSV
+              const max = Math.max(r, g, b);
+              const min = Math.min(r, g, b);
+              const d = max - min;
+              let hue = 0;
+              const sat = max === 0 ? 0 : d / max;
+              const val = max / 255;
+              if (d !== 0) {
+                if (max === r) hue = ((g - b) / d + (g < b ? 6 : 0)) * 60;
+                else if (max === g) hue = ((b - r) / d + 2) * 60;
+                else hue = ((r - g) / d + 4) * 60;
+              }
+
+              // Exclude neutral gray/white/black backdrops (desks, walls, shadows)
+              const isNeutral = sat < 0.10 || (Math.abs(r - g) < 12 && Math.abs(g - b) < 12 && Math.abs(r - b) < 12) || val < 0.10;
+              if (isNeutral) continue;
+
+              // Human skin tone detection
+              const isSkin = (r > 95 && g > 40 && b > 20 && (max - min) > 15 && Math.abs(r - g) > 15 && r > g && r > b) ||
+                             (hue >= 0 && hue <= 35 && sat >= 0.23 && sat <= 0.68 && val >= 0.35);
+              if (isSkin) { skinPixels++; continue; }
+
+              // Foliar tissue detection:
+              // 1. Chlorophyll green (ExG + HSV)
+              const exg = 2 * g - r - b;
+              const isGreen = (exg > 4 && g > 35 && sat > 0.12) || (hue >= 32 && hue <= 165 && sat > 0.14 && val > 0.14) || (g > r * 1.08 && g > b * 1.08 && sat > 0.12);
+              // 2. Chlorotic yellowing
+              const isChlorotic = (hue >= 26 && hue <= 64 && sat > 0.25 && val > 0.25) || (r > 115 && g > 105 && b < 90 && r > b * 1.25 && sat > 0.20);
+              // 3. Rust or Necrotic lesions on foliage
+              const isNecroticBrown = (hue >= 10 && hue <= 42 && sat >= 0.20 && val >= 0.15 && val <= 0.70 && r > g * 1.06);
+
+              const isFoliage = (isGreen || isChlorotic || isNecroticBrown) && !isSkin;
+              if (isFoliage) {
+                leafPixels++;
+                if (x < minX) minX = x;
+                if (x > maxX) maxX = x;
+                if (y < minY) minY = y;
+                if (y > maxY) maxY = y;
+                if (x >= cxMin && x <= cxMax && y >= cyMin && y <= cyMax) {
+                  centerFoliage++;
+                }
+              }
+            }
+          }
+
+          const totalPixels = w * h;
+          const leafRatio = leafPixels / totalPixels;
+          const centerRatio = centerFoliage / totalCenterPx;
+          const hasLeaves = leafRatio >= 0.025 || centerRatio >= 0.04;
+          const hasPerson = skinPixels > totalPixels * 0.30 && skinPixels > leafPixels * 1.8;
+
+          if (hasLeaves && !hasPerson) {
+            const padX = Math.round(w * 0.04);
+            const padY = Math.round(h * 0.04);
+            const bX = Math.max(0, minX - padX);
+            const bY = Math.max(0, minY - padY);
+            const bW = Math.min(w - bX, (maxX - minX) + padX * 2);
+            const bH = Math.min(h - bY, (maxY - minY) + padY * 2);
+
+            const xPct = Math.max(2, Math.min(85, Math.round((bX / w) * 100)));
+            const yPct = Math.max(2, Math.min(85, Math.round((bY / h) * 100)));
+            const wPct = Math.max(10, Math.min(96, Math.round((bW / w) * 100)));
+            const hPct = Math.max(10, Math.min(96, Math.round((bH / h) * 100)));
+
+            const centerX = xPct + wPct / 2;
+            const centerY = yPct + hPct / 2;
+            const isCentered = centerX >= 30 && centerX <= 70 && centerY >= 25 && centerY <= 75 && (centerRatio >= 0.06 || leafRatio >= 0.06);
+
+            const confidence = Math.min(98, Math.round(84 + Math.min(14, centerRatio * 60)));
+
+            resolve({
+              success: true,
+              leaf_count: 1,
+              has_leaves: true,
+              has_person: false,
+              is_centered: isCentered,
+              center_ratio: Math.round(centerRatio * 100),
+              detections: [
+                {
+                  id: 'ondevice-leaf-1',
+                  class_name: 'leaf',
+                  label: 'Plant Leaf Specimen',
+                  confidence,
+                  box_percent: {
+                    x: xPct,
+                    y: yPct,
+                    width: wPct,
+                    height: hPct
+                  },
+                  is_centered: isCentered,
+                  is_person: false
+                }
+              ],
+              engine: 'AgriSense On-Device Agro-Vision Detector'
+            });
+            return;
+          }
+
+          resolve({
+            success: true,
+            leaf_count: 0,
+            has_leaves: false,
+            has_person: hasPerson,
+            is_centered: false,
+            detections: [],
+            engine: 'AgriSense On-Device Agro-Vision Detector'
+          });
+        } catch (e) {
+          console.warn('AgriSense: On-device leaf detection error:', e);
+          resolve({ success: false, detections: [], leaf_count: 0, has_leaves: false, has_person: false, is_centered: false });
+        }
+      };
+
+      const isCanvas = (typeof HTMLCanvasElement !== 'undefined' && imageSource instanceof HTMLCanvasElement) || (imageSource && typeof imageSource.getContext === 'function');
+      const isVideo = (typeof HTMLVideoElement !== 'undefined' && imageSource instanceof HTMLVideoElement) || (imageSource && imageSource.tagName === 'VIDEO');
+      if (isVideo || isCanvas) {
+        processImageData(imageSource);
+      } else if (typeof imageSource === 'string') {
+        const img = new Image();
+        if (imageSource.startsWith('http')) {
+          img.crossOrigin = 'anonymous';
+        }
+        img.onload = () => processImageData(img);
+        img.onerror = () => resolve({ success: false, detections: [], leaf_count: 0, has_leaves: false, has_person: false, is_centered: false });
+        img.src = imageSource;
+      } else {
+        resolve({ success: false, detections: [], leaf_count: 0, has_leaves: false, has_person: false, is_centered: false });
+      }
+    } catch {
+      resolve({ success: false, detections: [], leaf_count: 0, has_leaves: false, has_person: false, is_centered: false });
+    }
+  });
+}
+
+/**
+ * Real-Time Plant Leaf Object Detection using YOLOv8 via Computer Vision Backend
+ * with seamless on-device vision fallback.
+ */
+export async function detectPlantLeaves(imageSource) {
+  // 1. Try remote/local FastAPI backend if reachable and secure
+  const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
+  const isBackendHttp = CV_BACKEND_URL.startsWith('http://');
+
+  if (!isHttps || !isBackendHttp) {
+    try {
+      const formData = new FormData();
+      if (typeof imageSource === 'string' && imageSource.startsWith('data:')) {
+        formData.append('image', imageSource);
+      } else if ((typeof HTMLCanvasElement !== 'undefined' && imageSource instanceof HTMLCanvasElement) || (imageSource && typeof imageSource.toDataURL === 'function')) {
+        formData.append('image', imageSource.toDataURL('image/jpeg', 0.65));
+      } else if (typeof imageSource === 'string') {
+        const blob = await fetch(imageSource).then(r => r.blob());
+        formData.append('file', blob, 'frame.jpg');
+      }
+
+      const res = await fetch(`${CV_BACKEND_URL}/api/detect`, {
+        method: 'POST',
+        body: formData,
+        signal: AbortSignal.timeout(1000)
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.success && data.has_leaves) {
+          const primary = data.detections?.[0];
+          if (primary) {
+            const b = primary.box_percent || primary;
+            const cx = (b.x || 0) + (b.width || 0) / 2;
+            const cy = (b.y || 0) + (b.height || 0) / 2;
+            data.is_centered = cx >= 30 && cx <= 70 && cy >= 25 && cy <= 75;
+          }
+          return data;
+        }
+      }
+    } catch (err) {
+      // Backend offline or timeout -> proceed to client-side detection
+    }
+  }
+
+  // 2. High-speed Autonomous On-Device Leaf Detection
+  return await detectLeavesOnDevice(imageSource);
 }
 
 /**
@@ -1619,7 +1823,7 @@ export async function analyzePlantImage(imageSource, sampleHint = null, options 
     const res = await fetch(`${CV_BACKEND_URL}/api/classify`, {
       method: 'POST',
       body: formData,
-      signal: AbortSignal.timeout(12000)
+      signal: AbortSignal.timeout(2000)
     });
 
     if (res.ok) {
