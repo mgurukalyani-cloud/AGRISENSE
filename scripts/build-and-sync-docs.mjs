@@ -31,18 +31,14 @@ function copyRecursive(src, dest) {
 
 copyRecursive(DIST, DOCS);
 
-// Ensure .nojekyll in docs
+// Ensure .nojekyll in docs and dist
 fs.writeFileSync(path.join(DOCS, '.nojekyll'), '');
 fs.writeFileSync(path.join(DIST, '.nojekyll'), '');
 
-// In docs/index.html, strip out any root redirect so docs/ can be served as root or subpath cleanly
-const docsIndexPath = path.join(DOCS, 'index.html');
-let docsHtml = fs.readFileSync(docsIndexPath, 'utf-8');
-docsHtml = docsHtml.replace(/<script>[\s\S]*?window\.location\.replace[\s\S]*?<\/script>/, '');
-fs.writeFileSync(docsIndexPath, docsHtml);
+const distHtml = fs.readFileSync(path.join(DIST, 'index.html'), 'utf-8');
 
-// Create 404.html in docs and dist for SPA routing fallback
-fs.writeFileSync(path.join(DOCS, '404.html'), docsHtml);
-fs.writeFileSync(path.join(DIST, '404.html'), docsHtml);
+// Ensure 404.html in docs and dist for SPA routing fallback
+fs.writeFileSync(path.join(DOCS, '404.html'), distHtml);
+fs.writeFileSync(path.join(DIST, '404.html'), distHtml);
 
 console.log('3. docs/ and dist/ updated successfully!');
