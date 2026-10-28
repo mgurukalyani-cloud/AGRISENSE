@@ -1,3 +1,4 @@
+import klhLogoImg from '../assets/klh-farms-logo.png';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -127,50 +128,52 @@ export default function Header({
           <button
             onClick={onNavigateHome}
             type="button"
-            className="flex items-center space-x-2.5 sm:space-x-3 text-left group cursor-pointer transition-transform hover:opacity-95 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 rounded-2xl p-1 -m-1"
+            className="flex items-center space-x-2.5 sm:space-x-3 text-left group cursor-pointer transition-transform hover:opacity-95 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 rounded-2xl p-1 -m-1 shrink-0"
             title={t('app.returnHome', 'Return to Home Page')}
           >
             {/* KLH Farms Logo */}
-            <div className="flex items-center bg-white p-0.5 rounded-full shadow-xs border border-emerald-900/10 shrink-0 overflow-hidden ring-2 ring-emerald-500/25 group-hover:ring-emerald-600 group-hover:scale-105 transition-all">
+            <div className="flex items-center justify-center bg-white p-0.5 rounded-full shadow-xs border border-emerald-900/10 shrink-0 overflow-hidden ring-2 ring-emerald-500/25 group-hover:ring-emerald-600 group-hover:scale-105 transition-all">
               <img
-                src={`${import.meta.env.BASE_URL}klh-farms-logo.png`}
+                src={klhLogoImg || `${import.meta.env.BASE_URL}klh-farms-logo.png`}
                 alt="KLH Farms Logo"
                 className="h-11 sm:h-13 w-11 sm:w-13 object-cover rounded-full"
                 onError={(e) => {
-                  e.currentTarget.src = './klh-farms-logo.png';
+                  if (e.currentTarget.src !== './klh-farms-logo.png') {
+                    e.currentTarget.src = './klh-farms-logo.png';
+                  }
                 }}
               />
             </div>
 
-            <div>
+            <div className="shrink-0 min-w-0">
               <div className="flex items-center space-x-2">
-                <span className="text-xl sm:text-2xl font-black tracking-tight text-emerald-950 group-hover:text-emerald-800 transition-colors">
+                <span className="text-xl sm:text-2xl font-black tracking-tight text-emerald-950 group-hover:text-emerald-800 transition-colors whitespace-nowrap">
                   {t('app.title', 'AgriSense')}
                 </span>
-                <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                <span className="hidden xl:inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200 whitespace-nowrap shrink-0">
                   {t('app.subtitle', 'Smart Agriculture')}
                 </span>
               </div>
-              <p className="text-xs text-emerald-700/80 font-medium hidden sm:block">
+              <p className="text-xs text-emerald-700/80 font-medium hidden md:block whitespace-nowrap">
                 {t('app.tagline', 'Real-World Weather Monitoring & Agro-Advisory')}
               </p>
             </div>
           </button>
 
           {/* Center Search / Location Quick Display (Desktop) */}
-          <div className="hidden md:flex items-center flex-1 max-w-md mx-6">
+          <div className="hidden md:flex items-center flex-1 min-w-0 max-w-xs lg:max-w-md mx-2 lg:mx-4">
             <button
               onClick={onOpenSearch}
-              className="w-full flex items-center justify-between px-3.5 py-2 text-sm bg-emerald-50/60 hover:bg-emerald-50 border border-emerald-200/80 hover:border-emerald-300 rounded-xl text-slate-700 transition-all shadow-xs group cursor-pointer"
+              className="w-full flex items-center justify-between px-3.5 py-2 text-sm bg-emerald-50/60 hover:bg-emerald-50 border border-emerald-200/80 hover:border-emerald-300 rounded-xl text-slate-700 transition-all shadow-xs group cursor-pointer min-w-0"
             >
-              <div className="flex items-center space-x-2.5 truncate">
+              <div className="flex items-center space-x-2.5 truncate min-w-0">
                 <MapPin className="w-4 h-4 text-emerald-600 shrink-0 group-hover:scale-110 transition-transform" />
                 <span className="font-semibold text-slate-900 truncate">
                   {location.name}
                   {location.admin1 ? `, ${location.admin1}` : ''}
                 </span>
                 {location.country_code && (
-                  <span className="text-xs px-1.5 py-0.5 rounded bg-white text-slate-500 border border-slate-200 font-mono">
+                  <span className="text-xs px-1.5 py-0.5 rounded bg-white text-slate-500 border border-slate-200 font-mono shrink-0">
                     {location.country_code}
                   </span>
                 )}

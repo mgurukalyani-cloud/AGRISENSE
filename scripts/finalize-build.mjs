@@ -24,8 +24,9 @@ if (fs.existsSync(path.join(DIST, 'index.html'))) {
   fs.writeFileSync(path.join(ROOT, 'index.html'), distHtml);
   fs.writeFileSync(path.join(ROOT, '404.html'), distHtml);
   fs.writeFileSync(path.join(ROOT, '.nojekyll'), '');
-  copyRecursive(path.join(DIST, 'assets'), path.join(ROOT, 'assets'));
-  copyRecursive(path.join(DIST, 'crops'), path.join(ROOT, 'crops'));
+  
+  // Copy all assets, images, and folders from DIST to ROOT
+  copyRecursive(DIST, ROOT);
   copyRecursive(path.join(ROOT, 'public/audio'), path.join(ROOT, 'audio'));
 
   if (fs.existsSync(DOCS)) {
