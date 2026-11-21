@@ -157,6 +157,32 @@ def build_system_prompt(farm_context: Optional[Dict[str, Any]], language: str) -
             conf = plant_health.get("confidence", 0)
             context_lines.append(f"- Recent Leaf Scan: {d_name} (Confidence: {conf}%)")
 
+        # Registered Crop & Precision Lifecycle Advisory
+        crop = farm_context.get("registeredCrop") or farm_context.get("activeCrop")
+        lifecycle = farm_context.get("lifecycle")
+        fertilizer = farm_context.get("fertilizerResult")
+        if crop and isinstance(crop, dict):
+            c_name = str(crop.get("cropId", "Crop")).upper()
+            c_var = crop.get("varietyId", "")
+            c_area = crop.get("areaAcres", "")
+            c_method = crop.get("cultivationMethod", "")
+            context_lines.append(
+                f"- Registered Farmer's Field: {c_name} (Variety: {c_var}, Area: {c_area} Acres, Method: {c_method})"
+            )
+            if lifecycle and isinstance(lifecycle, dict):
+                das = lifecycle.get("daysAfterSowing")
+                stage_name = lifecycle.get("currentStage", {}).get("name", "Active")
+                context_lines.append(f"- Current Growth Stage: {stage_name} ({das} Days After Sowing/Transplanting)")
+            if fertilizer and isinstance(fertilizer, dict):
+                prods = fertilizer.get("commercialProducts", {})
+                u_bags = prods.get("urea", {}).get("totalBags", "")
+                d_bags = prods.get("dap", {}).get("totalBags", "")
+                m_bags = prods.get("mop", {}).get("totalBags", "")
+                context_lines.append(
+                    f"- Scientifically Calculated Fertilizer Requirement: Urea: {u_bags} bags (45kg), DAP: {d_bags} bags (50kg), MOP Potash: {m_bags} bags (50kg)"
+                )
+
+
     telemetry_block = "\n".join(context_lines) if context_lines else "None provided."
 
     lang_instructions = {

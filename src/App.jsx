@@ -9,6 +9,7 @@ import HourlyForecastStrip from './components/HourlyForecastStrip';
 import FutureForecastView from './components/FutureForecastView';
 import HistoricalWeatherView from './components/HistoricalWeatherView';
 import PlantHealthPage from './components/plantHealth/PlantHealthPage';
+import CropLifecycleDashboard from './components/cropLifecycle/CropLifecycleDashboard';
 import CropPlanningPage from './components/cropPlanning/CropPlanningPage';
 import AnimalSoundPage from './components/animalRepellent/AnimalSoundPage';
 import PlatformModulesDrawer from './components/PlatformModulesDrawer';
@@ -333,6 +334,17 @@ export default function App() {
                   location={location}
                   tempUnit={tempUnit}
                   onAnalysisResultChange={setLatestPlantHealthResult}
+                />
+              </div>
+            )}
+
+            {/* TAB CONTENT: CROP LIFECYCLE & FERTILIZER ADVISORY */}
+            {activeTab === 'crop_lifecycle' && (
+              <div className="animate-in fade-in duration-300">
+                <CropLifecycleDashboard
+                  onOpenAssistantWithContext={(ctx) => {
+                    setActiveTab('voice_assistant');
+                  }}
                 />
               </div>
             )}

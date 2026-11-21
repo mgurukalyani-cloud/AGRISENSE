@@ -8,6 +8,9 @@
  */
 
 import { INDIAN_LANGUAGES, getLanguageByCode } from '../i18n/languages.js';
+import { 
+  getRegisteredCrops, getActiveCropId, calculateCropLifecycle, calculatePrecisionFertilizers 
+} from './cropLifecycleService.js';
 
 // Map Indian language codes to standard Web Speech BCP-47 tags
 export const SPEECH_LOCALES = {
@@ -317,6 +320,22 @@ class VoiceAssistantService {
         ? `${window.location.origin}/api/assistant/chat`
         : 'http://127.0.0.1:8000/api/assistant/chat';
 
+    // Dynamically retrieve active crop lifecycle and fertilizer parameters
+    let activeRegisteredCrop = null;
+    let activeLifecycle = null;
+    let activeFertilizerResult = null;
+    try {
+      const allCrops = getRegisteredCrops();
+      const activeId = getActiveCropId();
+      activeRegisteredCrop = allCrops.find((c) => c.id === activeId) || allCrops[0] || null;
+      if (activeRegisteredCrop) {
+        activeLifecycle = calculateCropLifecycle(activeRegisteredCrop);
+        activeFertilizerResult = calculatePrecisionFertilizers(activeRegisteredCrop, activeLifecycle);
+      }
+    } catch (e) {
+      console.warn('Failed to resolve active crop context for LLM:', e);
+    }
+
     const farmContext = {
       location: location || { name: 'Active Agricultural District' },
       weather: currentWeather,
@@ -325,7 +344,10 @@ class VoiceAssistantService {
       soil: farmTelemetry?.soilAnalysis,
       waterTank: farmTelemetry?.waterTank,
       zones: farmTelemetry?.zones,
-      plantHealthResult
+      plantHealthResult,
+      registeredCrop: activeRegisteredCrop,
+      lifecycle: activeLifecycle,
+      fertilizerResult: activeFertilizerResult
     };
 
     try {

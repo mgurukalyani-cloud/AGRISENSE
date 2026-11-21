@@ -80,6 +80,15 @@ export default function PlatformModulesDrawer({ isOpen, onClose, onNavigateTab }
       statusColor: 'bg-emerald-100 text-emerald-800 border-emerald-300',
       icon: Volume2,
       desc: 'PyTorch deep neural audio model analyzing 131 bio-acoustic features to identify crop-damaging wildlife while strictly protecting cattle and beneficial birds.'
+    },
+    {
+      id: 'crop_lifecycle',
+      number: 'Module 07',
+      title: 'Crop Lifecycle & Precision Fertilizer Advisory',
+      status: 'ACTIVE & INTEGRATED',
+      statusColor: 'bg-emerald-100 text-emerald-800 border-emerald-300',
+      icon: Sprout,
+      desc: 'ICAR/SAU deterministic fertilizer dosage engine, variety duration scaling, soil test adjustments (±25%), FYM organic credits, CIBRC crop protection, and bilingual voice narration.'
     }
   ];
 
@@ -379,6 +388,43 @@ export default function PlatformModulesDrawer({ isOpen, onClose, onNavigateTab }
                 >
                   <Volume2 className="w-4 h-4" />
                   <span>Launch Animal Sound Detection & Alerts</span>
+                  <ChevronRight className="w-4 h-4 ml-1" />
+                </button>
+              </div>
+            )}
+
+            {activeModuleTab === 'crop_lifecycle' && (
+              <div className="space-y-4 animate-in fade-in">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-bold text-slate-900">
+                    Module 7: Crop Lifecycle & Fertilizer Recommendation
+                  </h3>
+                  <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                    Active & Integrated
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Advanced agronomic recommendation engine implementing ICAR, PJTSAU, and SAU package of practices. Delivers deterministic stage-wise fertilizer schedules (Urea, DAP, MOP commercial bags), laboratory soil test card adjustments (±25%), FYM organic manure credits, CIBRC registered protection with PHI days, and bilingual Telugu/English audio narration.
+                </p>
+                <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-950 space-y-2">
+                  <span className="font-bold block">Key Engine Features:</span>
+                  <ul className="space-y-1 list-disc list-inside text-[11px] text-emerald-900">
+                    <li>Multi-crop registration: Paddy (BPT 5204, MTU 1010), Bt Cotton, Hybrid Maize, Chilli, Groundnut</li>
+                    <li>Automatic DAS & DAT tracking with nursery age & duration scaling</li>
+                    <li>Separation of elemental nutrient doses (N-P-K kg/ac) from commercial fertilizer bag counts</li>
+                    <li>Symptom-driven CIBRC pest & disease diagnosis with non-chemical IPM priority</li>
+                    <li>Native voice assistant narration with Play/Pause/Resume in Telugu and English</li>
+                  </ul>
+                </div>
+                <button
+                  onClick={() => {
+                    if (onNavigateTab) onNavigateTab('crop_lifecycle');
+                    onClose();
+                  }}
+                  className="w-full flex items-center justify-center space-x-2 py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-800 to-green-800 text-white font-bold text-xs sm:text-sm shadow-md hover:from-emerald-900 hover:to-green-900 transition-all cursor-pointer"
+                >
+                  <Sprout className="w-4 h-4" />
+                  <span>Launch Crop Lifecycle & Fertilizer Advisory</span>
                   <ChevronRight className="w-4 h-4 ml-1" />
                 </button>
               </div>

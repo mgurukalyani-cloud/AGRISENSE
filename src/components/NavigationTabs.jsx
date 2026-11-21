@@ -42,6 +42,14 @@ export default function NavigationTabs({
       badgeColor: 'text-teal-700 bg-teal-100/90 border-teal-300'
     },
     {
+      id: 'crop_lifecycle',
+      label: 'Crop Advisory',
+      fullLabel: 'Crop Lifecycle & Fertilizer Advisory',
+      icon: Sprout,
+      badge: 'ICAR AI',
+      badgeColor: 'text-emerald-800 bg-emerald-100/90 border-emerald-300'
+    },
+    {
       id: 'crop_planning',
       label: 'Market Prices',
       fullLabel: t('app.cropPlanning', 'Crop & Mandi AI'),
