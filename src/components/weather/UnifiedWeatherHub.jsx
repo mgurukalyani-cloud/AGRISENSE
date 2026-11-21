@@ -34,6 +34,7 @@ import WeatherMetricsGrid from '../WeatherMetricsGrid';
 import FarmWeatherAdvisor from '../FarmWeatherAdvisor';
 import FutureForecastView from '../FutureForecastView';
 import HistoricalWeatherView from '../HistoricalWeatherView';
+import { WhatsAppIcon } from '../alerts/WhatsAppAlertModal';
 
 export default function UnifiedWeatherHub({
   weatherData,
@@ -43,6 +44,7 @@ export default function UnifiedWeatherHub({
   onOpenSearch,
   onOpenModulesDrawer,
   onNavigateTab,
+  onOpenWhatsAppAlerts,
   initialView = 'all' // 'all' | 'live' | 'forecast' | 'past'
 }) {
   const { t } = useTranslation();
@@ -189,7 +191,17 @@ export default function UnifiedWeatherHub({
           </div>
 
           <div className="flex items-center space-x-3 text-xs text-emerald-300 font-mono">
-            <span className="flex items-center space-x-1">
+            <button
+              onClick={onOpenWhatsAppAlerts}
+              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-[#25D366]/20 hover:bg-[#25D366]/30 text-emerald-200 hover:text-white border border-[#25D366]/40 text-xs font-bold transition-all cursor-pointer shadow-xs font-sans"
+              title="Configure Automated WhatsApp Rain Alerts & Demo"
+            >
+              <span className="w-2 h-2 rounded-full bg-[#25D366] animate-pulse" />
+              <WhatsAppIcon className="w-3.5 h-3.5 text-[#25D366]" />
+              <span>WhatsApp Alerts (Demo)</span>
+            </button>
+
+            <span className="flex items-center space-x-1 hidden sm:flex">
               <Clock className="w-3.5 h-3.5 text-emerald-400" />
               <span>Auto-refresh: {Math.floor(autoRefreshSeconds / 60)}m {autoRefreshSeconds % 60}s</span>
             </span>

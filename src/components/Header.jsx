@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import LanguageSelectorButton from './LanguageSelectorButton';
 import { getLanguageByCode } from '../i18n/languages';
+import { WhatsAppIcon } from './alerts/WhatsAppAlertModal';
 
 export default function Header({
   location,
@@ -36,6 +37,7 @@ export default function Header({
   onOpenSettings,
   onOpenLanguageSelector,
   onOpenVoiceAssistant,
+  onOpenWhatsAppAlerts,
   onNavigateHome,
   provider = 'Open-Meteo & WMO',
   modelSources = 'ECMWF IFS / DWD ICON'
@@ -190,6 +192,17 @@ export default function Header({
               <span className="hidden sm:inline">{t('voice.buttonShort', 'Voice AI')}</span>
             </button>
 
+            {/* Automated WhatsApp Weather & Rain Alerts Quick Launcher */}
+            <button
+              onClick={onOpenWhatsAppAlerts}
+              className="px-2.5 sm:px-3 py-2 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-all bg-[#25D366]/15 hover:bg-[#25D366]/25 text-emerald-950 border border-[#25D366]/40 shadow-2xs cursor-pointer"
+              title="Automated WhatsApp Weather & Rain Alerts & Demo"
+            >
+              <span className="w-2 h-2 rounded-full bg-[#25D366] animate-pulse shrink-0" />
+              <WhatsAppIcon className="w-4 h-4 text-emerald-800 shrink-0" />
+              <span className="hidden sm:inline">WhatsApp Alerts</span>
+            </button>
+
             {/* GPS My Location Button */}
             <button
               onClick={onUseMyLocation}
@@ -292,6 +305,23 @@ export default function Header({
               </div>
               <span className="text-[10px] bg-emerald-600 px-2 py-0.5 rounded-full text-white">
                 22 Languages
+              </span>
+            </button>
+
+            {/* Mobile WhatsApp Alerts Button */}
+            <button
+              onClick={() => {
+                onOpenWhatsAppAlerts();
+                setMobileMenuOpen(false);
+              }}
+              className="w-full flex items-center justify-between px-3.5 py-2.5 bg-[#25D366]/15 hover:bg-[#25D366]/25 border border-[#25D366]/40 rounded-xl text-xs font-bold text-emerald-950 shadow-2xs cursor-pointer"
+            >
+              <div className="flex items-center space-x-2">
+                <WhatsAppIcon className="w-4 h-4 text-[#25D366]" />
+                <span>WhatsApp Weather & Rain Alerts</span>
+              </div>
+              <span className="text-[10px] bg-[#25D366] text-emerald-950 font-black px-2 py-0.5 rounded-full">
+                Demo
               </span>
             </button>
 

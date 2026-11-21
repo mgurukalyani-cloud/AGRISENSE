@@ -21,6 +21,8 @@ import FloatingVoiceButton from './components/voiceAssistant/FloatingVoiceButton
 import WeatherAlertBanner from './components/WeatherAlertBanner';
 import Footer from './components/Footer';
 import UnifiedWeatherHub from './components/weather/UnifiedWeatherHub';
+import WhatsAppAlertModal from './components/alerts/WhatsAppAlertModal';
+import { detectWeatherShift } from './services/whatsappAlertService';
 
 import { fetchWeatherData, reverseGeocodeCoords, DEFAULT_REAL_LOCATION } from './services/weatherApi';
 import { getDemoWeatherData } from './services/demoData';
@@ -50,6 +52,8 @@ export default function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isLanguageModalOpen, setIsLanguageModalOpen] = useState(false);
   const [isVoiceAssistantModalOpen, setIsVoiceAssistantModalOpen] = useState(false);
+  const [isWhatsAppModalOpen, setIsWhatsAppModalOpen] = useState(false);
+  const [activeWhatsAppAlert, setActiveWhatsAppAlert] = useState(null);
   const [latestPlantHealthResult, setLatestPlantHealthResult] = useState(null);
 
   const timerRef = useRef(null);
@@ -166,6 +170,23 @@ export default function App() {
     setLocation(customLoc);
   };
 
+  // Detect sudden weather shift or imminent rain from live meteorological telemetry
+  useEffect(() => {
+    if (weatherData) {
+      const shift = detectWeatherShift(weatherData);
+      if (shift) {
+        setActiveWhatsAppAlert(shift);
+      }
+    }
+  }, [weatherData]);
+
+  const handleOpenWhatsAppAlerts = (alert = null) => {
+    if (alert) {
+      setActiveWhatsAppAlert(alert);
+    }
+    setIsWhatsAppModalOpen(true);
+  };
+
   // Compute advisor score for tab badge
   const advisories = weatherData?.current && weatherData?.daily
     ? generateFarmAdvisories(weatherData.current, weatherData.daily, weatherData.hourly)
@@ -189,6 +210,7 @@ export default function App() {
         onOpenSettings={() => setIsSettingsOpen(true)}
         onOpenLanguageSelector={() => setIsLanguageModalOpen(true)}
         onOpenVoiceAssistant={() => setIsVoiceAssistantModalOpen(true)}
+        onOpenWhatsAppAlerts={() => handleOpenWhatsAppAlerts()}
         onOpenSplash={() => setShowSplash(true)}
         onNavigateHome={() => { setActiveTab('weather'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
         provider={weatherData?.provider || 'Open-Meteo & WMO'}
@@ -202,6 +224,7 @@ export default function App() {
           <WeatherAlertBanner
             weatherData={weatherData}
             tempUnit={tempUnit}
+            onOpenWhatsAppAlerts={handleOpenWhatsAppAlerts}
           />
         )}
 
@@ -256,6 +279,7 @@ export default function App() {
                 onOpenSearch={() => setIsSearchOpen(true)}
                 onOpenModulesDrawer={() => setIsModulesDrawerOpen(true)}
                 onNavigateTab={setActiveTab}
+                onOpenWhatsAppAlerts={() => handleOpenWhatsAppAlerts()}
                 initialView={
                   activeTab === 'live' ? 'live' :
                   activeTab === 'forecast' ? 'forecast' :
@@ -377,6 +401,14 @@ export default function App() {
       <LanguageSelectorModal
         isOpen={isLanguageModalOpen}
         onClose={() => setIsLanguageModalOpen(false)}
+      />
+
+      {/* Automated WhatsApp Weather & Rain Alerts & Demo Modal */}
+      <WhatsAppAlertModal
+        isOpen={isWhatsAppModalOpen}
+        onClose={() => setIsWhatsAppModalOpen(false)}
+        location={location}
+        activeAlert={activeWhatsAppAlert}
       />
 
       {/* Global Multilingual Voice Assistant Modal Overlay */}

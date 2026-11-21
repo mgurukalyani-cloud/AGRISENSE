@@ -10,8 +10,9 @@ import {
   ShieldAlert
 } from 'lucide-react';
 import { formatTemp } from '../services/weatherUtils';
+import { WhatsAppIcon } from './alerts/WhatsAppAlertModal';
 
-export default function WeatherAlertBanner({ weatherData, tempUnit }) {
+export default function WeatherAlertBanner({ weatherData, tempUnit, onOpenWhatsAppAlerts }) {
   const [dismissed, setDismissed] = useState(false);
 
   if (!weatherData || !weatherData.current || dismissed) return null;
@@ -109,6 +110,16 @@ export default function WeatherAlertBanner({ weatherData, tempUnit }) {
           <p className="text-xs mt-1 text-slate-700 leading-relaxed max-w-3xl">
             {alert.detail}
           </p>
+
+          <div className="pt-2">
+            <button
+              onClick={() => onOpenWhatsAppAlerts && onOpenWhatsAppAlerts(alert)}
+              className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-[#25D366] hover:bg-[#20bd5a] text-emerald-950 font-black text-xs shadow-xs transition-all cursor-pointer"
+            >
+              <WhatsAppIcon className="w-3.5 h-3.5 text-emerald-950" />
+              <span>Send Alert to WhatsApp (Demo)</span>
+            </button>
+          </div>
         </div>
       </div>
 

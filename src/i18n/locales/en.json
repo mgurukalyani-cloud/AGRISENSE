@@ -18,6 +18,7 @@
 
     "voiceAssistant": "Voice Assistant",
     "platformModules": "Platform Modules",
+    "whatsappAlerts": "WhatsApp Alerts",
     "settings": "Preferences & Data Sources",
     "myLocation": "My Location",
     "search": "Search",
@@ -326,6 +327,7 @@
     "modularArchitecture": "Modular Architecture:",
     "module1Active": "Module 01: Weather Intelligence (Active)",
     "platformModules": "Platform Modules",
+    "whatsappAlerts": "WhatsApp Alerts",
     "standardsTitle": "Meteorological Standards",
     "copyright": "AgriSense Platform. Built for precision agricultural stewardship.",
     "systemSettings": "System Settings & Units",
