@@ -12,6 +12,7 @@ import PlantHealthPage from './components/plantHealth/PlantHealthPage';
 import CropLifecycleDashboard from './components/cropLifecycle/CropLifecycleDashboard';
 import CropPlanningPage from './components/cropPlanning/CropPlanningPage';
 import AnimalSoundPage from './components/animalRepellent/AnimalSoundPage';
+import AgriSenseStorePage from './components/store/AgriSenseStorePage';
 import PlatformModulesDrawer from './components/PlatformModulesDrawer';
 
 import LocationSearchModal from './components/LocationSearchModal';
@@ -358,6 +359,13 @@ export default function App() {
                   location={location}
                   tempUnit={tempUnit}
                 />
+              </div>
+            )}
+
+            {/* TAB CONTENT: AGRISENSE AGRICULTURAL STORE & E-COMMERCE */}
+            {activeTab === 'store' && (
+              <div className="animate-in fade-in duration-300">
+                <AgriSenseStorePage />
               </div>
             )}
 

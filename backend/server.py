@@ -45,6 +45,20 @@ app.add_middleware(
 )
 
 # -------------------------------------------------------------
+# AgriSense Agricultural E-Commerce & Payment Gateway
+# -------------------------------------------------------------
+try:
+    from backend.store_db import init_store_database
+    from backend.store_routes import store_router, payment_router
+except ImportError:
+    from store_db import init_store_database
+    from store_routes import store_router, payment_router
+
+init_store_database()
+app.include_router(store_router)
+app.include_router(payment_router)
+
+# -------------------------------------------------------------
 # Global Model Instances & Initialization
 # -------------------------------------------------------------
 print("Initializing AgriSense Computer Vision Models...")

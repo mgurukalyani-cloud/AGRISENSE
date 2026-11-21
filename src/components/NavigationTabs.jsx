@@ -12,7 +12,8 @@ import {
   Mic,
   CalendarDays,
   ShieldAlert,
-  Calculator
+  Calculator,
+  ShoppingBag
 } from 'lucide-react';
 import { WhatsAppIcon } from './alerts/WhatsAppAlertModal';
 
@@ -55,6 +56,14 @@ export default function NavigationTabs({
       fullLabel: t('app.cropPlanning', 'Crop & Mandi AI'),
       icon: TrendingUp,
       badge: 'e-NAM',
+      badgeColor: 'text-emerald-800 bg-emerald-100/90 border-emerald-300'
+    },
+    {
+      id: 'store',
+      label: 'Agri Store',
+      fullLabel: 'AgriSense Store & E-Commerce',
+      icon: ShoppingBag,
+      badge: 'Shop',
       badgeColor: 'text-emerald-800 bg-emerald-100/90 border-emerald-300'
     },
     {

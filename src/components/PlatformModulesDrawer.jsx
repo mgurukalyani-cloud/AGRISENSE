@@ -15,7 +15,8 @@ import {
   ChevronRight,
   ShieldCheck,
   Zap,
-  Volume2
+  Volume2,
+  ShoppingBag
 } from 'lucide-react';
 
 
@@ -89,6 +90,15 @@ export default function PlatformModulesDrawer({ isOpen, onClose, onNavigateTab }
       statusColor: 'bg-emerald-100 text-emerald-800 border-emerald-300',
       icon: Sprout,
       desc: 'ICAR/SAU deterministic fertilizer dosage engine, variety duration scaling, soil test adjustments (±25%), FYM organic credits, CIBRC crop protection, and bilingual voice narration.'
+    },
+    {
+      id: 'store',
+      number: 'Module 08',
+      title: 'Agricultural E-Commerce, QR Payment & Delivery Tracking',
+      status: 'ACTIVE & INTEGRATED',
+      statusColor: 'bg-emerald-100 text-emerald-800 border-emerald-300',
+      icon: ShoppingBag,
+      desc: 'Certified chemical/organic fertilizers, CIBRC pesticides, certified seeds, equipment, restaurant-style shopping cart, UPI Dynamic QR payments, DBT subsidy accounting, and live 10-stage delivery tracking.'
     }
   ];
 

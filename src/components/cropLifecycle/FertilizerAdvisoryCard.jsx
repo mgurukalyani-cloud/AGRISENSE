@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { 
   Package, AlertTriangle, ShieldCheck, CheckCircle2, Info, ChevronDown, 
-  ChevronUp, Scale, ArrowRight, Sparkles, Layers 
+  ChevronUp, Scale, ArrowRight, Sparkles, Layers, ShoppingCart, Check
 } from 'lucide-react';
+import { storeClient } from '../../services/storeClientService';
 
 export default function FertilizerAdvisoryCard({ cropRecord, fertilizerResult, lang = 'en' }) {
   const isTe = lang === 'te';
   const [showElementalDetails, setShowElementalDetails] = useState(false);
+  const [addedToCart, setAddedToCart] = useState(false);
 
   if (!fertilizerResult) return null;
 
@@ -20,6 +22,24 @@ export default function FertilizerAdvisoryCard({ cropRecord, fertilizerResult, l
     generalPrecautions,
     teluguPrecautions
   } = fertilizerResult;
+
+  const handleAddAllToStoreCart = async () => {
+    try {
+      if (commercialProducts.urea?.totalBags > 0) {
+        await storeClient.addToCart('prod_urea_45kg', commercialProducts.urea.totalBags);
+      }
+      if (commercialProducts.dap?.totalBags > 0) {
+        await storeClient.addToCart('prod_dap_50kg', commercialProducts.dap.totalBags);
+      }
+      if (commercialProducts.mop?.totalBags > 0) {
+        await storeClient.addToCart('prod_mop_50kg', commercialProducts.mop.totalBags);
+      }
+      setAddedToCart(true);
+      setTimeout(() => setAddedToCart(false), 3000);
+    } catch (e) {
+      console.error('Failed to add fertilizers to cart:', e);
+    }
+  };
 
   return (
     <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-xl relative backdrop-blur-sm">
@@ -151,6 +171,29 @@ export default function FertilizerAdvisoryCard({ cropRecord, fertilizerResult, l
             {isTe ? `ఎకరానికి: ${commercialProducts.mop.kgPerAcre} kg | మొత్తం: ${commercialProducts.mop.totalKg} kg` : `${commercialProducts.mop.kgPerAcre} kg/acre | Total: ${commercialProducts.mop.totalKg} kg`}
           </p>
         </div>
+      </div>
+
+      {/* Quick Add To AgriSense Store Cart Action Banner */}
+      <div className="mb-6 p-4 rounded-2xl bg-gradient-to-r from-emerald-950/80 via-slate-900 to-emerald-950/80 border border-emerald-500/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-md">
+        <div>
+          <h4 className="text-xs font-black text-white flex items-center gap-1.5 uppercase tracking-wider">
+            <ShoppingCart className="w-4 h-4 text-emerald-400" />
+            <span>{isTe ? 'సిఫార్సు చేసిన ఎరువులను స్టోర్ కార్ట్‌కు జోడించండి' : 'Order Precision Fertilizer Package Directly'}</span>
+          </h4>
+          <p className="text-[11px] text-slate-300 mt-0.5">
+            {isTe
+              ? `యూరియా (${commercialProducts.urea.totalBags} బస్తాలు), డి.ఎ.పి (${commercialProducts.dap.totalBags} బస్తాలు), పొటాష్ (${commercialProducts.mop.totalBags} బస్తాలు) ఒకే క్లిక్‌తో ఆర్డర్ చేయండి.`
+              : `Add total ${commercialProducts.urea.totalBags} bags Urea, ${commercialProducts.dap.totalBags} bags DAP & ${commercialProducts.mop.totalBags} bags MOP to your cart.`}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={handleAddAllToStoreCart}
+          className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black text-xs shadow-md transition-all flex items-center gap-1.5 shrink-0 cursor-pointer"
+        >
+          {addedToCart ? <Check className="w-3.5 h-3.5" /> : <ShoppingCart className="w-3.5 h-3.5" />}
+          <span>{addedToCart ? (isTe ? 'కార్ట్‌కు జోడించబడింది!' : 'Added to Cart!') : (isTe ? 'అన్ని ఎరువులను కార్ట్‌కు చేర్చండి' : 'Add Package to Cart')}</span>
+        </button>
       </div>
 
       {/* Stage-wise Split Application Schedule */}
