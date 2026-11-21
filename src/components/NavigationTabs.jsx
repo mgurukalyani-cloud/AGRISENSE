@@ -1,115 +1,99 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  Home,
   Sun,
-  Sprout,
-  TrendingUp,
-  Layers,
+  History,
+  CalendarDays,
+  Compass,
+  Leaf,
+  LayoutDashboard,
   Mic,
-  Calendar,
-  AlertTriangle,
-  Calculator,
-  User,
-  Settings,
-  Leaf
+  Sprout,
+  Volume2,
+  Cpu
 } from 'lucide-react';
 
-export default function NavigationTabs({
-  activeTab,
-  onChangeTab,
-  advisorScore = 85,
-  alertCount = 3
-}) {
+export default function NavigationTabs({ activeTab, onChangeTab, advisorScore = 85 }) {
   const { t } = useTranslation();
 
   const tabs = [
     {
-      id: 'home',
-      label: t('nav.home', 'Home'),
-      sublabel: 'Command Center',
-      icon: Home,
-      badge: null
-    },
-    {
-      id: 'weather',
-      label: t('nav.weather', 'Weather'),
-      sublabel: 'Live & Forecast',
-      icon: Sun,
+      id: 'overview',
+      label: t('app.weatherOverview', 'Weather Overview'),
+      sublabel: 'Dashboard & Metrics',
+      icon: LayoutDashboard,
       badge: 'Live'
     },
     {
-      id: 'crop_recommendations',
-      label: t('nav.crops', 'Crop Matcher'),
-      sublabel: 'Seasonal Recommendations',
-      icon: Sprout,
-      badge: 'Season'
-    },
-    {
-      id: 'market_prices',
-      label: t('nav.market', 'Market Prices'),
-      sublabel: 'Mandi Rates & Forecast',
-      icon: TrendingUp,
-      badge: 'e-NAM'
-    },
-    {
-      id: 'soil_health',
-      label: t('nav.soil', 'Soil Health'),
-      sublabel: 'Fertilizer Assistant',
-      icon: Layers,
+      id: 'live',
+      label: t('app.liveWeather', 'Live Weather'),
+      sublabel: 'Current & Hourly',
+      icon: Sun,
       badge: null
     },
     {
-      id: 'voice_assistant',
-      label: t('nav.assistant', 'AI Assistant'),
-      sublabel: 'Farming Companion',
-      icon: Mic,
-      badge: 'Voice'
+      id: 'past',
+      label: t('app.pastWeather', 'Past Weather'),
+      sublabel: 'Historical Records',
+      icon: History,
+      badge: null
+    },
+    {
+      id: 'forecast',
+      label: t('app.weatherForecast', '7-Day Forecast'),
+      sublabel: 'Weekly Outlook',
+      icon: CalendarDays,
+      badge: null
+    },
+    {
+      id: 'plant_health',
+      label: t('app.plantHealth', 'Leaf Health AI'),
+      sublabel: 'Disease Scanner',
+      icon: Leaf,
+      badge: 'Vision AI'
     },
     {
       id: 'crop_planning',
-      label: t('nav.planning', 'Crop Planning'),
-      sublabel: 'Calendar & Rotations',
-      icon: Calendar,
-      badge: null
+      label: t('app.cropPlanning', 'Crop Planning'),
+      sublabel: 'Mandi & Profit AI',
+      icon: Sprout,
+      badge: 'Mandi AI'
     },
     {
-      id: 'alerts',
-      label: t('nav.alerts', 'Alerts'),
-      sublabel: 'Pest & Weather Warnings',
-      icon: AlertTriangle,
-      badge: alertCount > 0 ? `${alertCount}` : null,
-      badgeColor: 'bg-amber-500 text-slate-950'
+      id: 'animal_repellent',
+      label: t('app.animalRepellent', 'Animal Sound AI'),
+      sublabel: 'Bio-Acoustic Defense',
+      icon: Volume2,
+      badge: 'Bio-AI'
     },
     {
-      id: 'farm_calculators',
-      label: t('nav.calculators', 'Calculators'),
-      sublabel: '7 Precision Tools',
-      icon: Calculator,
-      badge: '7 Tools'
+      id: 'soil_monitoring',
+      label: t('app.soilMonitoring', 'Soil Telemetry'),
+      sublabel: 'ESP32 In-Situ Bus',
+      icon: Cpu,
+      badge: 'ESP32'
     },
     {
-      id: 'my_farm',
-      label: t('nav.myFarm', 'My Farm'),
-      sublabel: 'Land & Preferences',
-      icon: User,
-      badge: null
+      id: 'farm_insights',
+      label: t('app.farmInsights', 'Farm Insights'),
+      sublabel: 'Agronomic Rules',
+      icon: Compass,
+      badge: `${advisorScore}/100`
     },
     {
-      id: 'settings',
-      label: t('nav.settings', 'Settings'),
-      sublabel: 'Language & Units',
-      icon: Settings,
-      badge: null
+      id: 'voice_assistant',
+      label: t('app.voiceAssistant', 'Voice Assistant'),
+      sublabel: '22 Languages',
+      icon: Mic,
+      badge: 'Voice AI'
     }
   ];
 
   return (
     <div className="w-full bg-white/95 backdrop-blur-md rounded-2xl sm:rounded-3xl p-2 sm:p-2.5 border border-emerald-900/10 shadow-xs">
-      {/* Mobile Scrollable Strip / Desktop Responsive Grid */}
       <nav
-        className="flex lg:grid lg:grid-cols-11 gap-1.5 sm:gap-2 overflow-x-auto pb-1.5 lg:pb-0 scrollbar-thin"
-        aria-label="AgriSense Main Navigation"
+        className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-2.5"
+        aria-label="Smart Agriculture Navigation Tabs"
       >
         {tabs.map((tab) => {
           const Icon = tab.icon;
@@ -118,48 +102,49 @@ export default function NavigationTabs({
           return (
             <button
               key={tab.id}
+              data-tab-id={tab.id}
               onClick={() => onChangeTab(tab.id)}
-              className={`relative flex flex-col items-center justify-center p-2 sm:py-2.5 sm:px-2 rounded-xl sm:rounded-2xl transition-all duration-200 cursor-pointer group shrink-0 min-w-[76px] lg:min-w-0 ${
+              className={`flex items-center space-x-2.5 sm:space-x-3 p-2.5 sm:p-3 rounded-xl sm:rounded-2xl transition-all duration-200 cursor-pointer text-left min-h-[64px] ${
                 isActive
-                  ? 'bg-emerald-800 text-white shadow-sm ring-1 ring-emerald-600 scale-102'
-                  : 'bg-transparent text-slate-600 hover:text-emerald-950 hover:bg-emerald-50/70'
+                  ? 'bg-gradient-to-r from-emerald-800 via-emerald-800 to-green-800 text-white shadow-md shadow-emerald-900/20 ring-1 ring-emerald-500/30'
+                  : 'bg-slate-50/90 hover:bg-emerald-50/90 text-slate-700 hover:text-emerald-950 border border-slate-200/70 hover:border-emerald-300 shadow-2xs'
               }`}
             >
-              {/* Badge */}
-              {tab.badge && (
-                <span
-                  className={`absolute -top-1 -right-1 px-1.5 py-0.2 rounded-full text-[9px] font-bold shadow-2xs ${
-                    tab.badgeColor || (isActive ? 'bg-amber-400 text-emerald-950' : 'bg-emerald-100 text-emerald-800')
-                  }`}
-                >
-                  {tab.badge}
-                </span>
-              )}
-
               {/* Icon */}
               <div
-                className={`p-1.5 rounded-xl transition-all duration-200 ${
+                className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
                   isActive
-                    ? 'text-amber-300'
-                    : 'text-emerald-700 group-hover:scale-110'
+                    ? 'bg-white/20 text-emerald-100 shadow-inner'
+                    : 'bg-emerald-100/80 text-emerald-800'
                 }`}
               >
-                <Icon className="w-4 h-4 sm:w-5 sm:h-5" />
+                <Icon className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
               </div>
 
-              {/* Label */}
-              <span
-                className={`text-[11px] font-bold tracking-tight text-center truncate max-w-full leading-tight mt-0.5 ${
-                  isActive ? 'text-white' : 'text-slate-800'
-                }`}
-              >
-                {tab.label}
-              </span>
+              {/* Labels with guaranteed visibility (no truncation) */}
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center space-x-1.5 flex-wrap gap-y-0.5">
+                  <span className={`text-xs sm:text-sm font-bold leading-tight ${isActive ? 'text-white' : 'text-slate-900'}`}>
+                    {tab.label}
+                  </span>
 
-              {/* Active Indicator dot */}
-              {isActive && (
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 mt-1 animate-pulse" />
-              )}
+                  {tab.badge && (
+                    <span
+                      className={`text-[8.5px] sm:text-[9px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-wider shrink-0 ${
+                        isActive
+                          ? 'bg-emerald-700/90 text-emerald-100 border border-emerald-400/30'
+                          : 'bg-emerald-100 text-emerald-800 border border-emerald-200/60'
+                      }`}
+                    >
+                      {tab.badge}
+                    </span>
+                  )}
+                </div>
+
+                <p className={`text-[10px] font-medium leading-tight mt-0.5 ${isActive ? 'text-emerald-200/90' : 'text-slate-400'}`}>
+                  {tab.sublabel}
+                </p>
+              </div>
             </button>
           );
         })}

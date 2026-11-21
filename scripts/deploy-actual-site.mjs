@@ -19,10 +19,10 @@ function copyRecursive(src, dest) {
   }
 }
 
-console.log('1. Staging and committing cleanup to main...');
+console.log('1. Staging and committing restored actual site to main...');
 execSync('git add -A', { stdio: 'inherit' });
 try {
-  execSync('git commit -m "fix(branding): remove KLH Farms logo and cover landing page; direct launch into AgriSense The FOF dashboard"', { stdio: 'inherit' });
+  execSync('git commit -m "fix(site): restore actual AgriSense 10-card dashboard layout without KLH logo and landing page"', { stdio: 'inherit' });
 } catch (e) {
   console.log('No new changes to commit on main.');
 }
@@ -33,35 +33,30 @@ execSync('git push origin main', { stdio: 'inherit' });
 console.log('3. Switching to gh-pages...');
 execSync('git checkout gh-pages', { stdio: 'inherit' });
 
-console.log('4. Cleaning up KLH files on gh-pages...');
-const filesToDelete = [
-  'klh-farms-cover.jpg',
-  'klh-farms-logo.png',
-  'klh-farms-logo.jpg',
-  'klh-logo.png',
-  'cover-page.jpg',
-  'assets/klh-logo-D2PxWICW-D2PxWICW.png',
-  'assets/klh-logo-D2PxWICW.png',
-  'assets/klh-farms-cover-B2VdOQEY.jpg',
-  'docs/klh-farms-cover.jpg',
-  'docs/klh-farms-logo.png',
-  'docs/klh-farms-logo.jpg',
-  'docs/klh-logo.png',
-  'docs/cover-page.jpg',
-  'docs/assets/klh-logo-D2PxWICW.png',
-  'docs/assets/klh-farms-cover-B2VdOQEY.jpg'
+console.log('4. Cleaning up previous obsolete assets on gh-pages...');
+const obsoleteFiles = [
+  'assets/index-BWEp7ZQe.js',
+  'assets/index-D2nB_BCa.css',
+  'assets/favicon-YitIFxGv.svg',
+  'assets/index-_1k8ilKQ.js',
+  'docs/assets/index-BWEp7ZQe.js',
+  'docs/assets/index-D2nB_BCa.css',
+  'docs/assets/favicon-YitIFxGv.svg'
 ];
-for (const f of filesToDelete) {
+for (const f of obsoleteFiles) {
   const p = path.join(ROOT, f);
   if (fs.existsSync(p)) {
     fs.rmSync(p, { force: true });
-    console.log('Removed from gh-pages:', f);
+    console.log('Cleaned obsolete file on gh-pages:', f);
   }
 }
 
-console.log('5. Syncing clean build directly to gh-pages...');
+console.log('5. Syncing build directly to gh-pages root...');
 copyRecursive(DIST, ROOT);
 copyRecursive(path.join(ROOT, 'public/audio'), path.join(ROOT, 'audio'));
+copyRecursive(path.join(ROOT, 'public/crops'), path.join(ROOT, 'crops'));
+copyRecursive(path.join(ROOT, 'public/samples'), path.join(ROOT, 'samples'));
+
 const distHtml = fs.readFileSync(path.join(DIST, 'index.html'), 'utf8');
 fs.writeFileSync(path.join(ROOT, 'index.html'), distHtml);
 fs.writeFileSync(path.join(ROOT, '404.html'), distHtml);
@@ -69,7 +64,7 @@ fs.writeFileSync(path.join(ROOT, '.nojekyll'), '');
 
 execSync('git add -A', { stdio: 'inherit' });
 try {
-  execSync('git commit -m "deploy: remove KLH Farms logo and cover landing page; direct launch into AgriSense dashboard"', { stdio: 'inherit' });
+  execSync('git commit -m "deploy: sync restored actual AgriSense dashboard to GitHub Pages"', { stdio: 'inherit' });
 } catch (e) {
   console.log('No new changes to commit on gh-pages.');
 }

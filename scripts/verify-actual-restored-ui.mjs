@@ -44,22 +44,22 @@ const server = http.createServer((req, res) => {
   }
 });
 
-server.listen(4199, '127.0.0.1', async () => {
-  console.log('Local test server listening on http://127.0.0.1:4199');
+server.listen(4195, '127.0.0.1', async () => {
+  console.log('Local test server listening on http://127.0.0.1:4195');
 
   const chrome = spawn('C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', [
     '--headless=new',
-    '--remote-debugging-port=9877',
+    '--remote-debugging-port=9866',
     '--disable-gpu',
     '--no-first-run',
     '--window-size=1400,900',
-    'http://127.0.0.1:4199/AGRISENSE/'
+    'http://127.0.0.1:4195/AGRISENSE/'
   ]);
 
   try {
     await new Promise(r => setTimeout(r, 3500));
-    const tabs = await fetch('http://127.0.0.1:9877/json').then(r => r.json());
-    const pageTab = tabs.find(t => t.url && t.url.includes('4199')) || tabs[0];
+    const tabs = await fetch('http://127.0.0.1:9866/json').then(r => r.json());
+    const pageTab = tabs.find(t => t.url && t.url.includes('4195')) || tabs[0];
     const ws = new WebSocket(pageTab.webSocketDebuggerUrl);
 
     let id = 0;
@@ -80,13 +80,30 @@ server.listen(4199, '127.0.0.1', async () => {
     await send('Page.enable');
     await send('Runtime.enable');
 
-    console.log('Capturing initial landing screen (should be immediate AgriSense dashboard)...');
+    console.log('Capturing restored actual website (Image 2)...');
     await new Promise(r => setTimeout(r, 2000));
 
-    const shot = await send('Page.captureScreenshot', { format: 'png' });
-    const shotFile = path.join(ARTIFACT_DIR, 'agrisense-direct-dashboard.png');
-    fs.writeFileSync(shotFile, Buffer.from(shot.result.data, 'base64'));
-    console.log('✓ Saved agrisense-direct-dashboard.png to:', shotFile);
+    const shot1 = await send('Page.captureScreenshot', { format: 'png' });
+    const file1 = path.join(ARTIFACT_DIR, 'actual-website-overview.png');
+    fs.writeFileSync(file1, Buffer.from(shot1.result.data, 'base64'));
+    console.log('✓ Saved actual-website-overview.png to:', file1);
+
+    // Click on "Animal Sound AI" tab to match Image 2 exactly
+    console.log('Clicking Animal Sound AI tab...');
+    await send('Runtime.evaluate', {
+      expression: `(() => {
+        const btn = document.querySelector('[data-tab-id="animal_repellent"]') ||
+                    Array.from(document.querySelectorAll('button')).find(b => b.textContent && b.textContent.includes('Animal Sound AI'));
+        if (btn) btn.click();
+      })()`
+    });
+
+    await new Promise(r => setTimeout(r, 1500));
+
+    const shot2 = await send('Page.captureScreenshot', { format: 'png' });
+    const file2 = path.join(ARTIFACT_DIR, 'actual-website-animal-sound-tab.png');
+    fs.writeFileSync(file2, Buffer.from(shot2.result.data, 'base64'));
+    console.log('✓ Saved actual-website-animal-sound-tab.png to:', file2);
 
     // Verify UI state
     const evalRes = await send('Runtime.evaluate', {
@@ -95,9 +112,12 @@ server.listen(4199, '127.0.0.1', async () => {
         return {
           hasCoverPage: text.includes('Skip to Website') || text.includes('Launching in'),
           hasKlhLogo: Boolean(document.querySelector('img[alt*="KLH"]')),
+          hasKlhText: text.includes('KLH FARMS') || text.includes('KLH Farms'),
           hasAgriSense: text.includes('AgriSense'),
-          hasTheFOF: text.includes('By The FOF') || text.includes('The FOF'),
-          hasWeatherOverview: text.includes('Weather Overview') || text.includes('Weather Advisory') || text.includes('Live Weather')
+          hasWeatherOverviewCard: text.includes('Weather Overview') && text.includes('Dashboard & Metrics'),
+          hasAnimalSoundCard: text.includes('Animal Sound AI') && text.includes('Bio-Acoustic Defense'),
+          hasVoiceAssistantCard: text.includes('Voice Assistant') && text.includes('22 Languages'),
+          hasPlatformModulesBtn: text.includes('Platform Modules')
         };
       })()`,
       returnByValue: true
