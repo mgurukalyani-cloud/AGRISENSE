@@ -183,12 +183,12 @@ export default function LiveAudioMonitor({
         if (onDetectionEvent) onDetectionEvent(result.event || result);
         if (onRefreshStatus) onRefreshStatus();
 
-        // If automated repellent was triggered by backend and sound payload returned
+        // If automated repellent was triggered: IMMEDIATELY PLAY SCARY PREDATOR DETERRENT SOUND!
         if (result.action_taken === 'DETERRENT_ACTIVATED' && result.deterrent_payload) {
-          safePlayer.playSound(
-            result.deterrent_payload.sound_file,
-            result.deterrent_payload.description,
-            result.deterrent_payload.duration_sec || 3.0
+          safePlayer.playScaryDeterrent(
+            result.predicted_class || 'wild_boar',
+            result.deterrent_payload.description || '🔊 Scary Predator Roar Deterrent',
+            result.deterrent_payload.duration_sec || 3.2
           );
         } else if (result.action_taken === 'FARMER_ALERT_BUZZER' && result.deterrent_payload) {
           safePlayer.playSound(

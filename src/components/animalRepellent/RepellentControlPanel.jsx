@@ -108,13 +108,12 @@ export default function RepellentControlPanel({ systemStatus, onRefreshStatus })
 
   const handleManualDispatch = async () => {
     const res = await triggerManualRepellent(manualSpecies);
-    if (res && res.success && res.deterrent_details) {
-      safePlayer.playSound(
-        res.deterrent_details.sound_file,
-        res.deterrent_details.description,
-        maxDurationSec
-      );
-    }
+    // Play scary predator deterrent sound immediately
+    safePlayer.playScaryDeterrent(
+      manualSpecies,
+      res?.description || `🔊 Manual Scary Predator Deterrent (${manualSpecies})`,
+      maxDurationSec
+    );
     if (onRefreshStatus) onRefreshStatus();
   };
 
