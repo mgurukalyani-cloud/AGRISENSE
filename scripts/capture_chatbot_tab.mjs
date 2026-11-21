@@ -13,7 +13,7 @@ const chromeProc = spawn(chromePath, [
   '--user-data-dir=' + tempDir,
   '--disable-gpu',
   '--no-sandbox',
-  '--window-size=1440,1050',
+  '--window-size=1440,1400',
   'https://mgurukalyani-cloud.github.io/AGRISENSE/'
 ]);
 
@@ -56,7 +56,12 @@ setTimeout(async () => {
       });
       console.log('Click result:', clickRes);
 
-      await new Promise(r => setTimeout(r, 2000));
+      // Scroll to top to ensure complete visibility of the header and chatbot
+      await send('Runtime.evaluate', {
+        expression: 'window.scrollTo(0, 0);'
+      });
+
+      await new Promise(r => setTimeout(r, 1000));
 
       const ss = await send('Page.captureScreenshot', { format: 'png' });
       if (ss && ss.data) {

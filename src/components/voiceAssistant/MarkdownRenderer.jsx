@@ -83,20 +83,20 @@ function renderInlineFormatting(text) {
       parts.push(
         <code
           key={`code-${keyIdx++}`}
-          className="px-1.5 py-0.5 rounded-md bg-emerald-100/80 text-emerald-900 font-mono text-xs font-semibold"
+          className="px-1.5 py-0.5 rounded-md bg-emerald-950 border border-emerald-700/60 text-emerald-300 font-mono text-xs font-semibold"
         >
           {token.slice(1, -1)}
         </code>
       );
     } else if (token.startsWith('**') && token.endsWith('**')) {
       parts.push(
-        <strong key={`bold-${keyIdx++}`} className="font-extrabold text-slate-900">
+        <strong key={`bold-${keyIdx++}`} className="font-extrabold text-white">
           {token.slice(2, -2)}
         </strong>
       );
     } else if (token.startsWith('*') && token.endsWith('*')) {
       parts.push(
-        <em key={`italic-${keyIdx++}`} className="italic text-slate-800">
+        <em key={`italic-${keyIdx++}`} className="italic text-emerald-200">
           {token.slice(1, -1)}
         </em>
       );
@@ -157,26 +157,26 @@ export default function MarkdownRenderer({ content = '' }) {
     // Headers
     if (trimmed.startsWith('### ')) {
       elements.push(
-        <h4 key={`h4-${i}`} className="text-sm font-bold text-emerald-950 mt-3 mb-1">
+        <h4 key={`h4-${i}`} className="text-sm font-bold text-emerald-200 mt-3 mb-1">
           {renderInlineFormatting(trimmed.slice(4))}
         </h4>
       );
     } else if (trimmed.startsWith('## ')) {
       elements.push(
-        <h3 key={`h3-${i}`} className="text-base font-extrabold text-emerald-950 mt-4 mb-1.5 border-b border-emerald-100 pb-1">
+        <h3 key={`h3-${i}`} className="text-base font-extrabold text-white mt-4 mb-1.5 border-b border-emerald-800/40 pb-1">
           {renderInlineFormatting(trimmed.slice(3))}
         </h3>
       );
     } else if (trimmed.startsWith('# ')) {
       elements.push(
-        <h2 key={`h2-${i}`} className="text-lg font-black text-emerald-950 mt-4 mb-2">
+        <h2 key={`h2-${i}`} className="text-lg font-black text-white mt-4 mb-2">
           {renderInlineFormatting(trimmed.slice(2))}
         </h2>
       );
     } else if (trimmed.startsWith('> ')) {
       // Blockquote
       elements.push(
-        <blockquote key={`bq-${i}`} className="pl-3 py-1 my-2 border-l-4 border-emerald-500 bg-emerald-50/60 rounded-r-lg text-slate-700 italic text-xs">
+        <blockquote key={`bq-${i}`} className="pl-3 py-1 my-2 border-l-4 border-emerald-400 bg-emerald-950/80 rounded-r-lg text-emerald-200 italic text-xs">
           {renderInlineFormatting(trimmed.slice(2))}
         </blockquote>
       );
@@ -184,8 +184,8 @@ export default function MarkdownRenderer({ content = '' }) {
       // Bullet list item
       elements.push(
         <div key={`li-${i}`} className="flex items-start space-x-2 my-1 pl-1">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 shrink-0 mt-2" />
-          <span className="text-xs sm:text-sm text-slate-800 leading-relaxed flex-1">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0 mt-2" />
+          <span className="text-xs sm:text-sm text-slate-100 leading-relaxed flex-1">
             {renderInlineFormatting(trimmed.replace(/^[-*•]\s+/, ''))}
           </span>
         </div>
@@ -196,10 +196,10 @@ export default function MarkdownRenderer({ content = '' }) {
       const num = numMatch ? numMatch[1] : '1';
       elements.push(
         <div key={`nli-${i}`} className="flex items-start space-x-2 my-1 pl-1">
-          <span className="text-xs font-bold text-emerald-700 shrink-0 mt-0.5">
+          <span className="text-xs font-bold text-emerald-300 shrink-0 mt-0.5">
             {num}.
           </span>
-          <span className="text-xs sm:text-sm text-slate-800 leading-relaxed flex-1">
+          <span className="text-xs sm:text-sm text-slate-100 leading-relaxed flex-1">
             {renderInlineFormatting(trimmed.replace(/^\d+\.\s+/, ''))}
           </span>
         </div>
@@ -210,7 +210,7 @@ export default function MarkdownRenderer({ content = '' }) {
     } else {
       // Standard paragraph line
       elements.push(
-        <p key={`p-${i}`} className="text-xs sm:text-sm text-slate-800 leading-relaxed my-0.5">
+        <p key={`p-${i}`} className="text-xs sm:text-sm text-slate-100 leading-relaxed my-0.5">
           {renderInlineFormatting(line)}
         </p>
       );
