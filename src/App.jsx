@@ -20,6 +20,7 @@ import VoiceFarmingAssistant from './components/voiceAssistant/VoiceFarmingAssis
 import FloatingVoiceButton from './components/voiceAssistant/FloatingVoiceButton';
 import WeatherAlertBanner from './components/WeatherAlertBanner';
 import Footer from './components/Footer';
+import UnifiedWeatherHub from './components/weather/UnifiedWeatherHub';
 
 import { fetchWeatherData, reverseGeocodeCoords, DEFAULT_REAL_LOCATION } from './services/weatherApi';
 import { getDemoWeatherData } from './services/demoData';
@@ -31,7 +32,7 @@ const AUTO_REFRESH_INTERVAL_SECONDS = 900; // 15 minutes
 
 export default function App() {
   const { t } = useTranslation();
-  const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'live' | 'past' | 'forecast' | 'plant_health' | 'crop_planning' | 'animal_repellent' | 'farm_insights' | 'voice_assistant'
+  const [activeTab, setActiveTab] = useState('weather'); // 'weather' | 'plant_health' | 'crop_planning' | 'animal_repellent' | 'soil_monitoring' | 'farm_insights' | 'voice_assistant'
   const [location, setLocation] = useState(DEFAULT_REAL_LOCATION);
   const [weatherData, setWeatherData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -189,7 +190,7 @@ export default function App() {
         onOpenLanguageSelector={() => setIsLanguageModalOpen(true)}
         onOpenVoiceAssistant={() => setIsVoiceAssistantModalOpen(true)}
         onOpenSplash={() => setShowSplash(true)}
-        onNavigateHome={() => { setActiveTab('overview'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+        onNavigateHome={() => { setActiveTab('weather'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
         provider={weatherData?.provider || 'Open-Meteo & WMO'}
         modelSources={weatherData?.modelSources || 'ECMWF IFS (0.1°) / DWD ICON'}
       />
@@ -245,301 +246,22 @@ export default function App() {
               advisorScore={advisories?.agriSuitabilityScore || 85}
             />
 
-            {/* TAB CONTENT: 1. WEATHER OVERVIEW (REDESIGNED PROFESSIONAL HOME PAGE) */}
-            {activeTab === 'overview' && (
-              <div className="space-y-8 sm:space-y-10 animate-in fade-in duration-300">
-                {/* 1. Command Center Welcome & Telemetry Status Hero */}
-                <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-950 via-[#0a2318] to-slate-950 text-white p-5 sm:p-7 border border-emerald-500/20 shadow-md">
-                  <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
-                  <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-5">
-                    <div className="space-y-2 max-w-2xl">
-                      <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-emerald-800/60 border border-emerald-500/40 text-emerald-200 text-xs font-bold uppercase tracking-wider">
-                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                        <span>AgriSense Precision Agriculture</span>
-                      </div>
-                      <h2 className="text-xl sm:text-2xl md:text-3xl font-black text-white tracking-tight">
-                        AgriSense Smart Farming Command Center
-                      </h2>
-                      <p className="text-xs sm:text-sm text-emerald-200/90 leading-relaxed font-medium">
-                        Real-world meteorological observations, ECMWF IFS 0.1° high-resolution numerical forecasts, AI leaf diagnostics, seasonal crop market intelligence, and bio-acoustic wildlife defense.
-                      </p>
-                    </div>
-
-                    <div className="flex flex-wrap lg:flex-col items-start lg:items-end gap-2.5 shrink-0 text-xs font-semibold">
-                      <div className="flex items-center space-x-2 px-3 py-1.5 rounded-xl bg-white/10 backdrop-blur-xs border border-white/15 text-emerald-200 shadow-2xs">
-                        <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                        <span>ECMWF IFS (0.1°) Verified</span>
-                      </div>
-                      <div className="flex items-center space-x-2 px-3 py-1.5 rounded-xl bg-white/10 backdrop-blur-xs border border-white/15 text-emerald-200 shadow-2xs">
-                        <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                        <span>Edge AI Telemetry Active</span>
-                      </div>
-                      
-                    </div>
-                  </div>
-                </div>
-
-                {/* 2. Hero Current Weather Section */}
-                <section className="space-y-3" aria-labelledby="section-current-weather">
-                  <div className="flex items-center justify-between pb-1 border-b border-emerald-900/10">
-                    <div className="flex items-center space-x-2 text-xs font-bold text-emerald-800 uppercase tracking-wider">
-                      <Sun className="w-4 h-4 text-emerald-600" />
-                      <span id="section-current-weather">Live Farm Microclimate & Observations</span>
-                    </div>
-                    <span className="text-[11px] font-mono text-slate-400">
-                      Auto-Refresh: {Math.floor(autoRefreshSeconds / 60)}m {autoRefreshSeconds % 60}s
-                    </span>
-                  </div>
-
-                  <CurrentWeatherCard
-                    weatherData={weatherData}
-                    tempUnit={tempUnit}
-                    onOpenSearch={() => setIsSearchOpen(true)}
-                  />
-                </section>
-
-                {/* 3. Core Precision AI & Telemetry Modules (Balanced 2x2 Grid) */}
-                <section className="space-y-4" aria-labelledby="section-core-modules">
-                  <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2 pb-2 border-b border-emerald-900/10">
-                    <div>
-                      <div className="flex items-center space-x-2 text-xs font-bold text-emerald-800 uppercase tracking-wider">
-                        <Sparkles className="w-4 h-4 text-emerald-600" />
-                        <span id="section-core-modules">Intelligent Farm Operations</span>
-                      </div>
-                      <h3 className="text-lg sm:text-xl font-black text-slate-900 mt-0.5">
-                        Precision Agriculture AI & Telemetry Modules
-                      </h3>
-                    </div>
-                    <p className="text-xs text-slate-500">
-                      Direct access to computer vision pathology, seasonal mandi planning, ESP32 root-zone bus, and animal acoustic defense
-                    </p>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-                    {/* Module 1: Plant Health & Leaf Disease Scanner */}
-                    <div className="bg-gradient-to-br from-emerald-950 via-emerald-900 to-teal-950 rounded-3xl p-5 sm:p-6 text-white shadow-md border border-emerald-700/60 flex flex-col justify-between space-y-4 hover:border-emerald-500/80 transition-all group">
-                      <div className="flex items-start space-x-4">
-                        <div className="w-12 h-12 rounded-2xl bg-white/10 text-emerald-200 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                          <ScanLine className="w-6 h-6 text-emerald-300" />
-                        </div>
-                        <div className="space-y-1">
-                          <div className="flex items-center space-x-2">
-                            <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-600/60 border border-emerald-400/40 text-emerald-100">
-                              {t('plantHealth.spotlightTag', 'AI Vision')}
-                            </span>
-                          </div>
-                          <h4 className="text-base sm:text-lg font-black text-white">
-                            {t('plantHealth.spotlightTitle', 'AI Plant Health & Leaf Disease Scanner')}
-                          </h4>
-                          <p className="text-xs text-emerald-200/90 leading-relaxed font-normal">
-                            {t('plantHealth.spotlightDesc', 'Use your camera or upload leaf photographs to detect early fungal blights, rusts, and nutrient deficiencies cross-referenced with farm weather.')}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="pt-2">
-                        <button
-                          onClick={() => setActiveTab('plant_health')}
-                          className="w-full flex items-center justify-center space-x-2 px-5 py-3 rounded-2xl bg-white text-emerald-950 font-bold text-xs sm:text-sm hover:bg-emerald-50 shadow-md transition-all cursor-pointer group-hover:shadow-lg"
-                        >
-                          <Leaf className="w-4 h-4 text-emerald-700" />
-                          <span>Open Plant Health Scanner</span>
-                          <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Module 2: Seasonal Crop Planning & Real Mandi Prices */}
-                    <div className="bg-gradient-to-br from-teal-950 via-emerald-900 to-green-950 rounded-3xl p-5 sm:p-6 text-white shadow-md border border-emerald-700/60 flex flex-col justify-between space-y-4 hover:border-emerald-500/80 transition-all group">
-                      <div className="flex items-start space-x-4">
-                        <div className="w-12 h-12 rounded-2xl bg-white/10 text-emerald-200 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                          <Sprout className="w-6 h-6 text-emerald-300" />
-                        </div>
-                        <div className="space-y-1">
-                          <div className="flex items-center space-x-2">
-                            <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-600/60 border border-emerald-400/40 text-emerald-100">
-                              {t('cropPlanning.spotlightTag', 'Market Intelligence')}
-                            </span>
-                          </div>
-                          <h4 className="text-base sm:text-lg font-black text-white">
-                            {t('cropPlanning.spotlightTitle', 'Seasonal Crop Planning & Real Mandi Prices')}
-                          </h4>
-                          <p className="text-xs text-emerald-200/90 leading-relaxed font-normal">
-                            {t('cropPlanning.spotlightDesc', 'Plan high-yielding crops for your soil and season, check live AGMARKNET mandi prices, and calculate cultivation expenditure, yield scenarios, and net profit.')}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="pt-2">
-                        <button
-                          onClick={() => setActiveTab('crop_planning')}
-                          className="w-full flex items-center justify-center space-x-2 px-5 py-3 rounded-2xl bg-white text-emerald-950 font-bold text-xs sm:text-sm hover:bg-emerald-50 shadow-md transition-all cursor-pointer group-hover:shadow-lg"
-                        >
-                          <Sprout className="w-4 h-4 text-emerald-700" />
-                          <span>Explore Crop Planning AI</span>
-                          <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Module 3: ESP32 Soil Telemetry & Active Buzzer */}
-                    <div className="bg-gradient-to-br from-[#072417] via-emerald-950 to-green-950 rounded-3xl p-5 sm:p-6 text-white shadow-md border border-emerald-700/60 flex flex-col justify-between space-y-4 hover:border-emerald-500/80 transition-all group">
-                      <div className="flex items-start space-x-4">
-                        <div className="w-12 h-12 rounded-2xl bg-white/10 text-emerald-200 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                          <Cpu className="w-6 h-6 text-emerald-300" />
-                        </div>
-                        <div className="space-y-1">
-                          <div className="flex items-center space-x-2">
-                            <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-600/60 border border-emerald-400/40 text-emerald-100">
-                              Hardware Bus
-                            </span>
-                          </div>
-                          <h4 className="text-base sm:text-lg font-black text-white">
-                            ESP32 Soil Telemetry & Alarm Hardware
-                          </h4>
-                          <p className="text-xs text-emerald-200/90 leading-relaxed font-normal">
-                            Monitor 4 physical capacitive root-zones (ADC1 pins 34, 35, 36, 39), verify open-circuit faults, and trigger the physical active buzzer on GPIO 25 with confirmed hardware ACK.
-                          </p>
-                        </div>
-                      </div>
-                      <div className="pt-2">
-                        <button
-                          onClick={() => setActiveTab('soil_monitoring')}
-                          className="w-full flex items-center justify-center space-x-2 px-5 py-3 rounded-2xl bg-white text-emerald-950 font-bold text-xs sm:text-sm hover:bg-emerald-50 shadow-md transition-all cursor-pointer group-hover:shadow-lg"
-                        >
-                          <Cpu className="w-4 h-4 text-emerald-700" />
-                          <span>Open Soil Telemetry Node</span>
-                          <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Module 4: Bio-Acoustic Wildlife Defense (INMP441 + AI Repellent) */}
-                    <div className="bg-gradient-to-br from-[#062817] via-emerald-900 to-[#021f10] rounded-3xl p-5 sm:p-6 text-white shadow-md border border-emerald-700/60 flex flex-col justify-between space-y-4 hover:border-emerald-500/80 transition-all group">
-                      <div className="flex items-start space-x-4">
-                        <div className="w-12 h-12 rounded-2xl bg-white/10 text-emerald-200 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                          <Volume2 className="w-6 h-6 text-emerald-300" />
-                        </div>
-                        <div className="space-y-1">
-                          <div className="flex items-center space-x-2">
-                            <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-600/60 border border-emerald-400/40 text-emerald-100">
-                              Bio-Acoustic AI
-                            </span>
-                          </div>
-                          <h4 className="text-base sm:text-lg font-black text-white">
-                            Animal Sound AI & Bio-Acoustic Defense
-                          </h4>
-                          <p className="text-xs text-emerald-200/90 leading-relaxed font-normal">
-                            Stream 16kHz I2S digital audio (SCK: 14, WS: 15, SD: 32), classify wildlife with PyTorch deep learning, and protect cows & sparrows with non-injurious deterrents.
-                          </p>
-                        </div>
-                      </div>
-                      <div className="pt-2">
-                        <button
-                          onClick={() => setActiveTab('animal_repellent')}
-                          className="w-full flex items-center justify-center space-x-2 px-5 py-3 rounded-2xl bg-white text-emerald-950 font-bold text-xs sm:text-sm hover:bg-emerald-50 shadow-md transition-all cursor-pointer group-hover:shadow-lg"
-                        >
-                          <Volume2 className="w-4 h-4 text-emerald-700" />
-                          <span>Open Animal Sound AI</span>
-                          <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </section>
-
-                {/* 4. Atmospheric & Agronomic Metrics Grid */}
-                <section className="space-y-3" aria-labelledby="section-agronomic-metrics">
-                  <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-1 pb-1 border-b border-emerald-900/10">
-                    <div className="flex items-center space-x-2 text-xs font-bold text-emerald-800 uppercase tracking-wider">
-                      <Compass className="w-4 h-4 text-emerald-600" />
-                      <span id="section-agronomic-metrics">8-Point Agronomic Environmental Metrics</span>
-                    </div>
-                    <span className="text-xs text-slate-500">
-                      Evapotranspiration, Dew Point, Soil Moisture & Atmospheric Pressures
-                    </span>
-                  </div>
-
-                  <WeatherMetricsGrid
-                    weatherData={weatherData}
-                    tempUnit={tempUnit}
-                  />
-                </section>
-
-                {/* 5. 24-Hour Operations Timeline & Hourly Forecast */}
-                <section className="space-y-3" aria-labelledby="section-hourly-forecast">
-                  <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-1 pb-1 border-b border-emerald-900/10">
-                    <div className="flex items-center space-x-2 text-xs font-bold text-emerald-800 uppercase tracking-wider">
-                      <CalendarDays className="w-4 h-4 text-emerald-600" />
-                      <span id="section-hourly-forecast">24-Hour Hourly Operations Forecast</span>
-                    </div>
-                    <span className="text-xs text-slate-500">
-                      Hourly temperature trend, precipitation probability, and wind trajectory
-                    </span>
-                  </div>
-
-                  <HourlyForecastStrip
-                    hourly={weatherData.hourly}
-                    tempUnit={tempUnit}
-                  />
-                </section>
-
-                {/* 6. Smart Agro-Advisory & Field Operations */}
-                <section className="space-y-3" aria-labelledby="section-agro-advisory">
-                  <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-1 pb-1 border-b border-emerald-900/10">
-                    <div className="flex items-center space-x-2 text-xs font-bold text-emerald-800 uppercase tracking-wider">
-                      <Droplets className="w-4 h-4 text-emerald-600" />
-                      <span id="section-agro-advisory">Agro-Meteorological Advisory & Field Guidance</span>
-                    </div>
-                    <span className="text-xs text-slate-500">
-                      Suitability index for spraying, irrigation, and field machinery
-                    </span>
-                  </div>
-
-                  <FarmWeatherAdvisor
-                    weatherData={weatherData}
-                    onOpenModulesDrawer={() => setIsModulesDrawerOpen(true)}
-                  />
-                </section>
-              </div>
-            )}
-
-            {/* TAB CONTENT: 2. LIVE WEATHER */}
-            {activeTab === 'live' && (
-              <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-300">
-                <CurrentWeatherCard
-                  weatherData={weatherData}
-                  tempUnit={tempUnit}
-                  onOpenSearch={() => setIsSearchOpen(true)}
-                />
-                <HourlyForecastStrip
-                  hourly={weatherData.hourly}
-                  tempUnit={tempUnit}
-                />
-                <WeatherMetricsGrid
-                  weatherData={weatherData}
-                  tempUnit={tempUnit}
-                />
-              </div>
-            )}
-
-            {/* TAB CONTENT: 3. PAST WEATHER (HISTORICAL RECORDS) */}
-            {activeTab === 'past' && (
-              <div className="animate-in fade-in duration-300">
-                <HistoricalWeatherView
-                  historicalData={weatherData.historical}
-                  location={location}
-                  tempUnit={tempUnit}
-                />
-              </div>
-            )}
-
-            {/* TAB CONTENT: 4. WEATHER FORECAST (7-10 DAYS) */}
-            {activeTab === 'forecast' && (
-              <div className="animate-in fade-in duration-300">
-                <FutureForecastView
-                  daily={weatherData.daily}
-                  tempUnit={tempUnit}
-                />
-              </div>
+            {/* TAB CONTENT: UNIFIED WEATHER INTELLIGENCE (LIVE • FORECAST • PAST MERGED) */}
+            {(activeTab === 'weather' || activeTab === 'overview' || activeTab === 'live' || activeTab === 'past' || activeTab === 'forecast') && (
+              <UnifiedWeatherHub
+                weatherData={weatherData}
+                location={location}
+                tempUnit={tempUnit}
+                autoRefreshSeconds={autoRefreshSeconds}
+                onOpenSearch={() => setIsSearchOpen(true)}
+                onOpenModulesDrawer={() => setIsModulesDrawerOpen(true)}
+                onNavigateTab={setActiveTab}
+                initialView={
+                  activeTab === 'live' ? 'live' :
+                  activeTab === 'forecast' ? 'forecast' :
+                  activeTab === 'past' ? 'past' : 'all'
+                }
+              />
             )}
 
             {/* TAB CONTENT: 5. PLANT HEALTH & LEAF DISEASE ANALYSIS (EXTENSION MODULE) */}

@@ -18,32 +18,11 @@ export default function NavigationTabs({ activeTab, onChangeTab, advisorScore = 
 
   const tabs = [
     {
-      id: 'overview',
-      label: t('app.weatherOverview', 'Weather Overview'),
-      sublabel: 'Dashboard & Metrics',
-      icon: LayoutDashboard,
-      badge: 'Live'
-    },
-    {
-      id: 'live',
-      label: t('app.liveWeather', 'Live Weather'),
-      sublabel: 'Current & Hourly',
+      id: 'weather',
+      label: t('app.weatherIntelligence', 'Weather Intelligence'),
+      sublabel: t('app.weatherUnifiedSublabel', 'Live • Forecast • Past'),
       icon: Sun,
-      badge: null
-    },
-    {
-      id: 'past',
-      label: t('app.pastWeather', 'Past Weather'),
-      sublabel: 'Historical Records',
-      icon: History,
-      badge: null
-    },
-    {
-      id: 'forecast',
-      label: t('app.weatherForecast', '7-Day Forecast'),
-      sublabel: 'Weekly Outlook',
-      icon: CalendarDays,
-      badge: null
+      badge: 'Real Data'
     },
     {
       id: 'plant_health',
@@ -92,12 +71,13 @@ export default function NavigationTabs({ activeTab, onChangeTab, advisorScore = 
   return (
     <div className="w-full bg-white/95 backdrop-blur-md rounded-2xl sm:rounded-3xl p-2 sm:p-2.5 border border-emerald-900/10 shadow-xs">
       <nav
-        className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-2.5"
+        className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-2 sm:gap-2.5"
         aria-label="Smart Agriculture Navigation Tabs"
       >
         {tabs.map((tab) => {
           const Icon = tab.icon;
-          const isActive = activeTab === tab.id;
+          const isWeatherActive = activeTab === 'weather' || activeTab === 'overview' || activeTab === 'live' || activeTab === 'past' || activeTab === 'forecast';
+          const isActive = tab.id === 'weather' ? isWeatherActive : activeTab === tab.id;
 
           return (
             <button
@@ -121,7 +101,7 @@ export default function NavigationTabs({ activeTab, onChangeTab, advisorScore = 
                 <Icon className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
               </div>
 
-              {/* Labels with guaranteed visibility (no truncation) */}
+              {/* Labels with guaranteed visibility */}
               <div className="min-w-0 flex-1">
                 <div className="flex items-center space-x-1.5 flex-wrap gap-y-0.5">
                   <span className={`text-xs sm:text-sm font-bold leading-tight ${isActive ? 'text-white' : 'text-slate-900'}`}>

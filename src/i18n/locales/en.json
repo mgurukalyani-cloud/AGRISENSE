@@ -5,6 +5,8 @@
     "tagline": "Real-World Weather Monitoring & Agro-Advisory",
     "version": "Smart Agriculture",
     "weatherOverview": "Weather Overview",
+    "weatherIntelligence": "Weather Intelligence",
+    "weatherUnifiedSublabel": "Live • Forecast • Past",
     "liveWeather": "Live Weather",
     "pastWeather": "Past Weather",
     "weatherForecast": "Weather Forecast",
