@@ -163,13 +163,13 @@ export default function Header({
             </div>
           </button>
 
-          {/* Center Location Search Capsule (Vibrant & Elegant) */}
-          <div className="hidden md:flex items-center flex-1 min-w-0 max-w-xs lg:max-w-md mx-2 lg:mx-4">
+          {/* Center Location Search Capsule (Vibrant & Elegant, Guaranteed Width) */}
+          <div className="hidden md:flex items-center shrink-0 w-64 lg:w-72 xl:w-80 mx-2">
             <button
               onClick={onOpenSearch}
-              className="w-full flex items-center justify-between px-3.5 py-2 text-xs sm:text-sm bg-gradient-to-r from-emerald-50/90 via-white to-teal-50/70 hover:from-emerald-100/90 hover:to-teal-100/70 border border-emerald-300/80 hover:border-emerald-500 rounded-2xl text-slate-800 transition-all shadow-xs hover:shadow-md hover:shadow-emerald-900/10 group cursor-pointer min-w-0"
+              className="w-full flex items-center justify-between px-3.5 py-2 text-xs sm:text-sm bg-gradient-to-r from-emerald-50/90 via-white to-teal-50/70 hover:from-emerald-100/90 hover:to-teal-100/70 border border-emerald-300/80 hover:border-emerald-500 rounded-2xl text-slate-800 transition-all shadow-xs hover:shadow-md hover:shadow-emerald-900/10 group cursor-pointer"
             >
-              <div className="flex items-center space-x-2.5 truncate min-w-0">
+              <div className="flex items-center space-x-2 truncate min-w-0">
                 <div className="w-7 h-7 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-700 shrink-0 group-hover:scale-110 transition-transform">
                   <MapPin className="w-4 h-4 text-emerald-700" />
                 </div>
@@ -184,7 +184,7 @@ export default function Header({
                 )}
               </div>
               
-              <div className="flex items-center space-x-1 px-2.5 py-1 rounded-xl text-emerald-700 hover:text-emerald-900 text-xs font-bold shrink-0 ml-2 group-hover:bg-emerald-100/60 transition-colors">
+              <div className="flex items-center space-x-1 px-2 py-0.5 rounded-xl text-emerald-700 hover:text-emerald-900 text-xs font-bold shrink-0 ml-1.5 group-hover:bg-emerald-100/60 transition-colors">
                 <Search className="w-3.5 h-3.5" />
                 <span>Change</span>
               </div>
@@ -192,10 +192,10 @@ export default function Header({
           </div>
 
           {/* Right Action Executive Button Group (Vibrant & Unified) */}
-          <div className="flex items-center space-x-1.5 sm:space-x-2">
+          <div className="flex items-center space-x-1.5 sm:space-x-2 shrink-0">
             
             {/* Quick 3-Language Switcher (EN, TE, HI) as shown in reference */}
-            <div className="hidden xl:flex items-center space-x-1 bg-slate-100/90 p-1 rounded-xl border border-slate-200/90">
+            <div className="hidden lg:flex items-center space-x-1 bg-slate-100/90 p-1 rounded-xl border border-slate-200/90">
               {[
                 { code: 'en', label: 'EN' },
                 { code: 'te', label: 'తెలుగు' },
@@ -216,10 +216,16 @@ export default function Header({
                   </button>
                 );
               })}
+              
+              {/* Globe button to access 22 languages modal */}
+              <button
+                onClick={onOpenLanguageSelector}
+                title="Select from 22 Indian Languages"
+                className="p-1 rounded-lg hover:bg-white/90 text-slate-600 hover:text-emerald-800 transition-colors cursor-pointer"
+              >
+                <Globe className="w-3.5 h-3.5 text-emerald-700" />
+              </button>
             </div>
-
-            {/* Global Indian Language Selector Button (Opens 22 languages modal) */}
-            <LanguageSelectorButton onOpen={onOpenLanguageSelector} />
 
             {/* Multilingual Voice Assistant Quick Launcher */}
             <button
@@ -239,7 +245,7 @@ export default function Header({
             >
               <span className="w-2 h-2 rounded-full bg-white animate-pulse shrink-0" />
               <WhatsAppIcon className="w-4 h-4 text-white shrink-0" />
-              <span className="hidden sm:inline">WhatsApp Alerts</span>
+              <span className="hidden xl:inline">WhatsApp Alerts</span>
             </button>
 
             {/* GPS My Location Button */}
@@ -247,43 +253,38 @@ export default function Header({
               onClick={onUseMyLocation}
               disabled={isGeoLoading}
               title={t('app.myLocation', 'My Location')}
-              className={`p-2 sm:px-3 sm:py-2 rounded-xl sm:rounded-2xl text-xs font-bold flex items-center space-x-1.5 transition-all border ${
+              className={`p-2 rounded-xl sm:rounded-2xl text-xs font-bold flex items-center justify-center transition-all border ${
                 isGeoLoading
                   ? 'bg-emerald-50 text-emerald-400 border-emerald-300 cursor-wait'
-                  : 'bg-white hover:bg-emerald-50 text-slate-700 hover:text-emerald-900 border-slate-200/90 hover:border-emerald-300 shadow-2xs hover:shadow-xs'
+                  : 'bg-white hover:bg-emerald-50 text-slate-700 hover:text-emerald-900 border-slate-200/90 hover:border-emerald-300 shadow-2xs hover:shadow-xs cursor-pointer'
               }`}
             >
               <Compass className={`w-4 h-4 text-emerald-600 ${isGeoLoading ? 'animate-spin' : ''}`} />
-              <span className="hidden lg:inline">{t('app.myLocation', 'My Location')}</span>
             </button>
 
-            {/* Manual Refresh Button & Timestamp */}
+            {/* Manual Refresh Button */}
             <button
               onClick={onRefresh}
               disabled={isRefreshing}
               title={`Last updated: ${formatUpdatedTime(lastUpdated)} (Click to refresh)`}
-              className="flex items-center space-x-2 px-2.5 sm:px-3 py-2 rounded-xl sm:rounded-2xl text-xs font-bold bg-white hover:bg-emerald-50 text-slate-700 hover:text-emerald-900 border border-slate-200/90 hover:border-emerald-300 shadow-2xs transition-all cursor-pointer"
+              className="p-2 rounded-xl sm:rounded-2xl text-xs font-bold bg-white hover:bg-emerald-50 text-slate-700 hover:text-emerald-900 border border-slate-200/90 hover:border-emerald-300 shadow-2xs transition-all cursor-pointer"
             >
               <RefreshCw className={`w-3.5 h-3.5 text-emerald-600 ${isRefreshing ? 'animate-spin' : ''}`} />
-              <div className="hidden xl:flex flex-col text-left">
-                <span className="text-[9.5px] text-slate-400 font-semibold leading-tight">{t('app.published', 'Published')}</span>
-                <span className="text-xs font-bold text-slate-800 leading-tight font-mono">{formatUpdatedTime(lastUpdated)}</span>
-              </div>
             </button>
 
             {/* Temp Unit Toggle °C / °F */}
             <button
               onClick={onToggleTempUnit}
               title="Toggle Celsius / Fahrenheit"
-              className="px-2.5 py-2 rounded-xl sm:rounded-2xl text-xs font-black bg-emerald-100 hover:bg-emerald-200 text-emerald-900 border border-emerald-300/80 transition-colors cursor-pointer font-mono"
+              className="px-2 py-1.5 rounded-xl sm:rounded-2xl text-xs font-black bg-emerald-100 hover:bg-emerald-200 text-emerald-900 border border-emerald-300/80 transition-colors cursor-pointer font-mono"
             >
               °{tempUnit}
             </button>
 
-            {/* Smart Agriculture Modules Drawer Button */}
+            {/* Platform Modules Drawer Button */}
             <button
               onClick={onOpenModulesDrawer}
-              className="hidden sm:flex items-center space-x-1.5 px-3 py-2 rounded-xl sm:rounded-2xl text-xs font-black bg-gradient-to-r from-emerald-900 via-emerald-800 to-slate-900 text-white hover:from-emerald-950 hover:to-slate-950 shadow-md shadow-emerald-950/20 border border-emerald-600/40 transition-all cursor-pointer hover:scale-[1.02]"
+              className="hidden 2xl:flex items-center space-x-1.5 px-3 py-2 rounded-xl sm:rounded-2xl text-xs font-black bg-gradient-to-r from-emerald-900 via-emerald-800 to-slate-900 text-white hover:from-emerald-950 hover:to-slate-950 shadow-md shadow-emerald-950/20 border border-emerald-600/40 transition-all cursor-pointer hover:scale-[1.02]"
             >
               <Layers className="w-3.5 h-3.5 text-emerald-400" />
               <span>{t('app.platformModules', 'Platform Modules')}</span>
