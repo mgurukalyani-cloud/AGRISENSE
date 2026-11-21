@@ -302,6 +302,7 @@ export default function App() {
               activeTab={activeTab}
               onChangeTab={setActiveTab}
               advisorScore={advisories?.agriSuitabilityScore || 85}
+              onOpenWhatsAppAlerts={() => handleOpenWhatsAppAlerts()}
             />
 
             {/* TAB CONTENT: UNIFIED WEATHER INTELLIGENCE (LIVE • FORECAST • PAST MERGED) */}

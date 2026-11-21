@@ -2,128 +2,174 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Sun,
-  History,
-  CalendarDays,
-  Compass,
+  Home,
   Leaf,
-  LayoutDashboard,
-  Mic,
   Sprout,
+  TrendingUp,
+  Cpu,
   Volume2,
-  Cpu
+  Compass,
+  Mic,
+  CalendarDays,
+  ShieldAlert,
+  Calculator
 } from 'lucide-react';
+import { WhatsAppIcon } from './alerts/WhatsAppAlertModal';
 
-export default function NavigationTabs({ activeTab, onChangeTab, advisorScore = 85 }) {
+export default function NavigationTabs({
+  activeTab,
+  onChangeTab,
+  advisorScore = 85,
+  onOpenWhatsAppAlerts
+}) {
   const { t } = useTranslation();
 
   const tabs = [
     {
       id: 'weather',
-      label: t('app.weatherIntelligence', 'Weather Intelligence'),
-      sublabel: t('app.weatherUnifiedSublabel', 'Live • Forecast • Past'),
+      label: 'Weather',
+      fullLabel: t('app.weatherIntelligence', 'Weather Intelligence'),
       icon: Sun,
-      badge: 'Real Data'
+      badge: 'Live',
+      badgeColor: 'text-emerald-700 bg-emerald-100/90 border-emerald-300'
     },
     {
       id: 'plant_health',
-      label: t('app.plantHealth', 'Leaf Health AI'),
-      sublabel: 'Disease Scanner',
+      label: 'Leaf Health',
+      fullLabel: t('app.plantHealth', 'Leaf Health AI'),
       icon: Leaf,
-      badge: 'Vision AI'
+      badge: 'Vision AI',
+      badgeColor: 'text-teal-700 bg-teal-100/90 border-teal-300'
     },
     {
       id: 'crop_planning',
-      label: t('app.cropPlanning', 'Crop Planning'),
-      sublabel: 'Mandi & Profit AI',
-      icon: Sprout,
-      badge: 'Mandi AI'
-    },
-    {
-      id: 'animal_repellent',
-      label: t('app.animalRepellent', 'Animal Sound AI'),
-      sublabel: 'Bio-Acoustic Defense',
-      icon: Volume2,
-      badge: 'Bio-AI'
+      label: 'Market Prices',
+      fullLabel: t('app.cropPlanning', 'Crop & Mandi AI'),
+      icon: TrendingUp,
+      badge: 'e-NAM',
+      badgeColor: 'text-emerald-800 bg-emerald-100/90 border-emerald-300'
     },
     {
       id: 'soil_monitoring',
-      label: t('app.soilMonitoring', 'Soil Telemetry'),
-      sublabel: 'ESP32 In-Situ Bus',
+      label: 'Soil Telemetry',
+      fullLabel: t('app.soilMonitoring', 'Soil Telemetry'),
       icon: Cpu,
-      badge: 'ESP32'
+      badge: 'ESP32',
+      badgeColor: 'text-cyan-800 bg-cyan-100/90 border-cyan-300'
+    },
+    {
+      id: 'animal_repellent',
+      label: 'Animal Sound AI',
+      fullLabel: t('app.animalRepellent', 'Animal Sound AI'),
+      icon: Volume2,
+      badge: 'Bio-AI',
+      badgeColor: 'text-purple-800 bg-purple-100/90 border-purple-300'
     },
     {
       id: 'farm_insights',
-      label: t('app.farmInsights', 'Farm Insights'),
-      sublabel: 'Agronomic Rules',
+      label: 'Farm Insights',
+      fullLabel: t('app.farmInsights', 'Farm Insights'),
       icon: Compass,
-      badge: `${advisorScore}/100`
+      badge: `${advisorScore}/100`,
+      badgeColor: 'text-amber-800 bg-amber-100/90 border-amber-300'
     },
     {
       id: 'voice_assistant',
-      label: t('app.voiceAssistant', 'Voice Assistant'),
-      sublabel: '22 Languages',
+      label: 'AI Assistant',
+      fullLabel: t('app.voiceAssistant', 'Voice Assistant'),
       icon: Mic,
-      badge: 'Voice AI'
+      badge: 'Voice',
+      badgeColor: 'text-indigo-800 bg-indigo-100/90 border-indigo-300'
+    },
+    {
+      id: 'whatsapp_alerts',
+      label: 'Alerts',
+      fullLabel: 'WhatsApp Weather Alerts',
+      icon: WhatsAppIcon,
+      badge: 'Demo',
+      badgeColor: 'text-green-800 bg-green-100/90 border-green-300',
+      action: onOpenWhatsAppAlerts
     }
   ];
 
   return (
-    <div className="w-full bg-white/95 backdrop-blur-md rounded-2xl sm:rounded-3xl p-2 sm:p-2.5 border border-emerald-900/10 shadow-xs">
+    <div className="w-full bg-white/95 backdrop-blur-xl rounded-2xl sm:rounded-3xl p-2 sm:p-3 border border-emerald-900/10 shadow-sm shadow-emerald-950/5">
       <nav
-        className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-2 sm:gap-2.5"
+        className="flex items-center justify-start xl:justify-center overflow-x-auto gap-2 sm:gap-2.5 py-1 px-1 scrollbar-thin scrollbar-thumb-emerald-200"
         aria-label="Smart Agriculture Navigation Tabs"
       >
         {tabs.map((tab) => {
           const Icon = tab.icon;
-          const isWeatherActive = activeTab === 'weather' || activeTab === 'overview' || activeTab === 'live' || activeTab === 'past' || activeTab === 'forecast';
+          const isWeatherActive =
+            activeTab === 'weather' ||
+            activeTab === 'overview' ||
+            activeTab === 'live' ||
+            activeTab === 'past' ||
+            activeTab === 'forecast';
           const isActive = tab.id === 'weather' ? isWeatherActive : activeTab === tab.id;
+
+          const handleClick = () => {
+            if (tab.action) {
+              tab.action();
+            } else {
+              onChangeTab(tab.id);
+            }
+          };
 
           return (
             <button
               key={tab.id}
               data-tab-id={tab.id}
-              onClick={() => onChangeTab(tab.id)}
-              className={`flex items-center space-x-2.5 sm:space-x-3 p-2.5 sm:p-3 rounded-xl sm:rounded-2xl transition-all duration-200 cursor-pointer text-left min-h-[64px] ${
+              onClick={handleClick}
+              className={`flex flex-col items-center justify-center px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-2xl transition-all duration-200 cursor-pointer text-center shrink-0 min-w-[90px] sm:min-w-[105px] group ${
                 isActive
-                  ? 'bg-gradient-to-r from-emerald-800 via-emerald-800 to-green-800 text-white shadow-md shadow-emerald-900/20 ring-1 ring-emerald-500/30'
-                  : 'bg-slate-50/90 hover:bg-emerald-50/90 text-slate-700 hover:text-emerald-950 border border-slate-200/70 hover:border-emerald-300 shadow-2xs'
+                  ? 'bg-gradient-to-b from-[#0a4d33] via-emerald-900 to-emerald-950 text-white shadow-lg shadow-emerald-950/20 ring-1 ring-emerald-500/40 -translate-y-0.5'
+                  : 'bg-slate-50/80 hover:bg-emerald-50/80 text-slate-700 hover:text-emerald-950 border border-slate-200/80 hover:border-emerald-300/80 shadow-2xs hover:-translate-y-0.5'
               }`}
+              title={tab.fullLabel}
             >
-              {/* Icon */}
-              <div
-                className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
-                  isActive
-                    ? 'bg-white/20 text-emerald-100 shadow-inner'
-                    : 'bg-emerald-100/80 text-emerald-800'
-                }`}
-              >
-                <Icon className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
+              {/* Top Mini Pill Badge */}
+              <div className="h-4 flex items-center justify-center mb-1">
+                {tab.badge && (
+                  <span
+                    className={`text-[9px] font-black px-1.5 py-0.2 rounded-full uppercase tracking-wider border leading-none ${
+                      isActive
+                        ? 'bg-emerald-700/80 text-emerald-200 border-emerald-500/40'
+                        : tab.badgeColor
+                    }`}
+                  >
+                    {tab.badge}
+                  </span>
+                )}
               </div>
 
-              {/* Labels with guaranteed visibility */}
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center space-x-1.5 flex-wrap gap-y-0.5">
-                  <span className={`text-xs sm:text-sm font-bold leading-tight ${isActive ? 'text-white' : 'text-slate-900'}`}>
-                    {tab.label}
-                  </span>
+              {/* Icon */}
+              <div
+                className={`w-7 h-7 sm:w-8 sm:h-8 rounded-xl flex items-center justify-center transition-transform group-hover:scale-110 ${
+                  isActive
+                    ? 'text-white'
+                    : 'text-emerald-700'
+                }`}
+              >
+                <Icon className="w-4 h-4 sm:w-5 sm:h-5" />
+              </div>
 
-                  {tab.badge && (
-                    <span
-                      className={`text-[8.5px] sm:text-[9px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-wider shrink-0 ${
-                        isActive
-                          ? 'bg-emerald-700/90 text-emerald-100 border border-emerald-400/30'
-                          : 'bg-emerald-100 text-emerald-800 border border-emerald-200/60'
-                      }`}
-                    >
-                      {tab.badge}
-                    </span>
-                  )}
-                </div>
+              {/* Label */}
+              <span
+                className={`text-xs font-extrabold mt-1 leading-tight tracking-tight whitespace-nowrap ${
+                  isActive ? 'text-white' : 'text-slate-800 group-hover:text-emerald-950'
+                }`}
+              >
+                {tab.label}
+              </span>
 
-                <p className={`text-[10px] font-medium leading-tight mt-0.5 ${isActive ? 'text-emerald-200/90' : 'text-slate-400'}`}>
-                  {tab.sublabel}
-                </p>
+              {/* Active Golden Indicator Dot */}
+              <div className="h-1.5 flex items-center justify-center mt-1">
+                {isActive ? (
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shadow-xs shadow-amber-300 animate-pulse" />
+                ) : (
+                  <span className="w-1 h-1 rounded-full bg-transparent group-hover:bg-emerald-300 transition-colors" />
+                )}
               </div>
             </button>
           );
