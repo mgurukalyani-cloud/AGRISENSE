@@ -418,8 +418,10 @@ export function createSimulatedHeavyRainWeatherData(baseData, location) {
       cloud_cover: times48h.map((_, i) => (i < 20 ? 100 : 75)),
       wind_speed_10m: times48h.map((_, i) => Math.round((28.5 - i * 0.4) * 10) / 10),
       wind_gusts_10m: times48h.map((_, i) => Math.round((44.0 - i * 0.5) * 10) / 10),
+      dew_point_2m: times48h.map(() => 18.2),
       soil_temperature_0cm: times48h.map(() => 16.5),
-      vapour_pressure_deficit: times48h.map(() => 0.12)
+      vapour_pressure_deficit: times48h.map(() => 0.12),
+      et0_fao_evapotranspiration: times48h.map(() => 0.05)
     },
     daily: {
       time: dailyTimes10d,

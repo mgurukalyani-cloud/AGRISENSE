@@ -121,15 +121,26 @@ export default function HistoricalWeatherView({
   const avgMaxTemp = maxTemps.length > 0 ? maxTemps.reduce((a, b) => a + b, 0) / maxTemps.length : null;
   const avgMinTemp = minTemps.length > 0 ? minTemps.reduce((a, b) => a + b, 0) / minTemps.length : null;
 
-  // Format Recharts data
-  const chartData = activeData.time.map((d, i) => ({
-    date: formatForecastDay(d),
-    fullDate: d,
-    maxTemp: formatTempRaw(activeData.temperature_2m_max[i], tempUnit),
-    minTemp: formatTempRaw(activeData.temperature_2m_min[i], tempUnit),
-    rain: activeData.precipitation_sum[i] || 0,
-    et0: activeData.et0_fao_evapotranspiration?.[i] || 0
-  }));
+  // Format Recharts data with cumulative precipitation and thermal averages
+  let cumulativeSum = 0;
+  const chartData = activeData.time.map((d, i) => {
+    const rain = Math.round((activeData.precipitation_sum[i] || 0) * 10) / 10;
+    cumulativeSum += rain;
+    const maxT = formatTempRaw(activeData.temperature_2m_max[i], tempUnit);
+    const minT = formatTempRaw(activeData.temperature_2m_min[i], tempUnit);
+    const meanT = Math.round(((maxT + minT) / 2) * 10) / 10;
+
+    return {
+      date: formatForecastDay(d),
+      fullDate: d,
+      maxTemp: maxT,
+      minTemp: minT,
+      meanTemp: meanT,
+      rain,
+      cumulativeRain: Math.round(cumulativeSum * 10) / 10,
+      et0: Math.round((activeData.et0_fao_evapotranspiration?.[i] || 0) * 10) / 10
+    };
+  });
 
   // Handle custom date range fetch
   const handleFetchCustomArchive = async () => {
@@ -333,24 +344,29 @@ export default function HistoricalWeatherView({
       </div>
 
       {/* Historical Temperature Range Chart */}
-      <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-xs">
-        <div className="flex items-center justify-between mb-4">
+      <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-xs space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
             <h3 className="text-base font-bold text-slate-900 flex items-center space-x-2">
               <ChartIcon className="w-4 h-4 text-emerald-600" />
-              <span>{t('history.dailyTempRange', 'Historical Daily Maximum & Minimum Temperature')}</span>
+              <span>{t('history.dailyTempRange', 'Historical Daily Maximum, Minimum & Mean Thermal Curves')}</span>
             </h3>
             <p className="text-xs text-slate-500">
-              {t('history.dailyTempSubtitle', 'Published temperature boundaries for the selected historical window')}
+              {t('history.dailyTempSubtitle', 'Calibrated thermal records and baseline diurnal variations for the selected time window')}
             </p>
           </div>
+          {avgMaxTemp !== null && (
+            <span className="text-xs font-bold text-emerald-800 bg-emerald-50 px-3 py-1 rounded-xl border border-emerald-200 self-start sm:self-auto">
+              Period Mean: {((avgMaxTemp + avgMinTemp) / 2).toFixed(1)}°{tempUnit}
+            </span>
+          )}
         </div>
 
-        <div className="h-64 sm:h-72 w-full">
+        <div className="h-64 sm:h-72 w-full pt-1">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-              <XAxis dataKey="date" stroke="#94a3b8" fontSize={11} tickLine={false} />
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+              <XAxis dataKey="date" stroke="#64748b" fontSize={11} tickLine={false} />
               <YAxis
                 stroke="#059669"
                 fontSize={11}
@@ -363,11 +379,13 @@ export default function HistoricalWeatherView({
                   if (active && payload && payload.length) {
                     const d = payload[0].payload;
                     return (
-                      <div className="bg-slate-900 text-white p-3 rounded-xl shadow-lg text-xs space-y-1">
-                        <p className="font-bold text-slate-200">{d.fullDate}</p>
-                        <p className="text-rose-400 font-semibold">Max Temp: {d.maxTemp}°{tempUnit}</p>
-                        <p className="text-teal-400 font-semibold">Min Temp: {d.minTemp}°{tempUnit}</p>
-                        <p className="text-blue-400">Precipitation: {d.rain} mm</p>
+                      <div className="bg-slate-950/95 backdrop-blur-md text-white p-3.5 rounded-2xl shadow-xl border border-white/10 text-xs space-y-1.5">
+                        <p className="font-bold text-slate-200 border-b border-white/10 pb-1">{d.fullDate}</p>
+                        <p className="text-rose-400 font-bold">Max Temperature: {d.maxTemp}°{tempUnit}</p>
+                        <p className="text-teal-400 font-bold">Min Temperature: {d.minTemp}°{tempUnit}</p>
+                        <p className="text-emerald-300 font-bold">Mean Temperature: {d.meanTemp}°{tempUnit}</p>
+                        <p className="text-slate-300">Daily Diurnal Range: {(d.maxTemp - d.minTemp).toFixed(1)}°{tempUnit}</p>
+                        <p className="text-blue-300">Measured Rainfall: {d.rain} mm</p>
                       </div>
                     );
                   }
@@ -380,66 +398,99 @@ export default function HistoricalWeatherView({
                 dataKey="maxTemp"
                 name={`Daily Max Temp (°${tempUnit})`}
                 stroke="#e11d48"
-                strokeWidth={2.5}
+                strokeWidth={2.8}
                 dot={{ r: 3, fill: '#e11d48' }}
+              />
+              <Line
+                type="monotone"
+                dataKey="meanTemp"
+                name={`Daily Mean Temp (°${tempUnit})`}
+                stroke="#059669"
+                strokeWidth={2}
+                strokeDasharray="4 4"
+                dot={false}
               />
               <Line
                 type="monotone"
                 dataKey="minTemp"
                 name={`Daily Min Temp (°${tempUnit})`}
                 stroke="#0d9488"
-                strokeWidth={2.5}
+                strokeWidth={2.8}
                 dot={{ r: 3, fill: '#0d9488' }}
               />
+              {avgMaxTemp !== null && (
+                <ReferenceLine
+                  y={Math.round((avgMaxTemp + avgMinTemp) / 2)}
+                  stroke="#94a3b8"
+                  strokeDasharray="3 3"
+                  label={{ value: 'Period Mean Baseline', fill: '#64748b', fontSize: 10 }}
+                />
+              )}
             </ComposedChart>
           </ResponsiveContainer>
         </div>
       </div>
 
-      {/* Historical Rainfall Bar Chart */}
-      <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-xs">
-        <div className="flex items-center justify-between mb-4">
+      {/* Historical Rainfall Bar & Cumulative Accumulation Chart */}
+      <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-xs space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
             <h3 className="text-base font-bold text-slate-900 flex items-center space-x-2">
               <Droplets className="w-4 h-4 text-blue-500" />
-              <span>{t('history.dailyPrecipEvents', 'Historical Daily Precipitation Events')}</span>
+              <span>{t('history.dailyPrecipEvents', 'Historical Daily Rainfall & Cumulative Accumulation')}</span>
             </h3>
             <p className="text-xs text-slate-500">
-              {t('history.dailyPrecipSubtitle', 'Measured daily rain accumulation in millimeters')}
+              {t('history.dailyPrecipSubtitle', 'Measured daily precipitation depth (bars) alongside running total seasonal volume (line)')}
             </p>
           </div>
-          <span className="text-xs font-semibold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-full">
-            {t('history.total', 'Total:')} {formatRain(totalRainfall)}
-          </span>
+          <div className="flex items-center space-x-2 self-start sm:self-auto">
+            <span className="text-xs font-bold text-blue-800 bg-blue-50 px-3 py-1 rounded-xl border border-blue-200">
+              Total Recorded: {formatRain(totalRainfall)} ({rainDaysCount} Rain Days)
+            </span>
+          </div>
         </div>
 
-        <div className="h-60 sm:h-64 w-full">
+        <div className="h-64 sm:h-72 w-full pt-1">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-              <XAxis dataKey="date" stroke="#94a3b8" fontSize={11} tickLine={false} />
-              <YAxis stroke="#3b82f6" fontSize={11} tickLine={false} unit="mm" />
+            <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+              <XAxis dataKey="date" stroke="#64748b" fontSize={11} tickLine={false} />
+              <YAxis yAxisId="rain" stroke="#2563eb" fontSize={11} tickLine={false} unit=" mm" domain={[0, 'auto']} />
+              <YAxis yAxisId="cum" orientation="right" stroke="#0284c7" fontSize={11} tickLine={false} unit=" mm" domain={[0, 'auto']} />
               <Tooltip
                 content={({ active, payload }) => {
                   if (active && payload && payload.length) {
                     const d = payload[0].payload;
                     return (
-                      <div className="bg-slate-900 text-white p-3 rounded-xl shadow-lg text-xs space-y-1">
-                        <p className="font-bold text-slate-200">{d.fullDate}</p>
-                        <p className="text-blue-400 font-semibold">Precipitation: {d.rain} mm</p>
+                      <div className="bg-slate-950/95 backdrop-blur-md text-white p-3.5 rounded-2xl shadow-xl border border-white/10 text-xs space-y-1.5">
+                        <p className="font-bold text-slate-200 border-b border-white/10 pb-1">{d.fullDate}</p>
+                        <p className="text-blue-400 font-bold">Daily Precipitation: {d.rain} mm</p>
+                        <p className="text-cyan-300 font-bold">Cumulative Rain to Date: {d.cumulativeRain} mm</p>
+                        <p className="text-amber-400">Crop Water Loss (ET₀): {d.et0} mm/day</p>
                       </div>
                     );
                   }
                   return null;
                 }}
               />
+              <Legend verticalAlign="top" align="right" wrapperStyle={{ paddingBottom: 10, fontSize: 11 }} />
               <Bar
+                yAxisId="rain"
                 dataKey="rain"
-                name="Rainfall (mm)"
+                name="Daily Rainfall (mm)"
                 fill="#3b82f6"
                 radius={[4, 4, 0, 0]}
               />
-            </BarChart>
+              <Line
+                yAxisId="cum"
+                type="monotone"
+                dataKey="cumulativeRain"
+                name="Cumulative Total (mm)"
+                stroke="#0284c7"
+                strokeWidth={2.5}
+                dot={{ r: 3, fill: '#0284c7' }}
+              />
+            </ComposedChart>
           </ResponsiveContainer>
         </div>
       </div>

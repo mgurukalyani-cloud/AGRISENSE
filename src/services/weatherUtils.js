@@ -111,6 +111,25 @@ export function formatHourTime(isoString) {
 }
 
 /**
+ * Format concise timeline label for chart axis (e.g. "3 PM", "Tom 6 AM")
+ */
+export function formatHourTimeline(isoString) {
+  if (!isoString) return '--';
+  try {
+    const d = new Date(isoString);
+    const now = new Date();
+    const isToday = d.getDate() === now.getDate() && d.getMonth() === now.getMonth();
+    const isTomorrow = d.getDate() === (new Date(now.getTime() + 86400000).getDate()) && d.getMonth() === now.getMonth();
+    const timeStr = d.toLocaleTimeString([], { hour: 'numeric', hour12: true });
+    if (isToday) return timeStr;
+    if (isTomorrow) return `+1d ${timeStr}`;
+    return d.toLocaleDateString([], { weekday: 'short' }) + ` ${timeStr}`;
+  } catch {
+    return formatHourTime(isoString);
+  }
+}
+
+/**
  * Format short day for forecast cards (e.g. "Fri, Oct 16" or "Today")
  */
 export function formatForecastDay(isoDate, isToday = false) {

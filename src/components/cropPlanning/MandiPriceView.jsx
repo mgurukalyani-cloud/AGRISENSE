@@ -17,11 +17,16 @@ import {
 import {
   AreaChart,
   Area,
+  ComposedChart,
+  Line,
+  Bar,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
-  ResponsiveContainer
+  ResponsiveContainer,
+  ReferenceLine,
+  Legend
 } from 'recharts';
 import { CROPS_DATABASE } from '../../services/cropPlanningService';
 import { getMandiPriceForCrop } from '../../services/mandiPriceService';
@@ -210,32 +215,77 @@ export default function MandiPriceView({
               </span>
             </div>
 
-            {/* Recharts Area Chart */}
-            <div className="h-56 sm:h-64 w-full pt-2">
+            {/* Recharts Composed Area Chart with Physical Mandi Arrivals */}
+            <div className="h-60 sm:h-68 w-full pt-2">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={mandi.weeklyHistory} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <ComposedChart data={mandi.weeklyHistory} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <defs>
-                    <linearGradient id="priceGradient" x1="0" y1="0" x2="0" y2="1">
+                    <linearGradient id="priceGradientMandi" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#059669" stopOpacity={0.35} />
                       <stop offset="95%" stopColor="#059669" stopOpacity={0.0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis dataKey="week" tick={{ fontSize: 11, fill: '#64748b' }} />
-                  <YAxis tick={{ fontSize: 11, fill: '#64748b' }} domain={['dataMin - 100', 'dataMax + 100']} />
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                  <XAxis dataKey="week" tick={{ fontSize: 11, fill: '#64748b' }} stroke="#cbd5e1" />
+                  <YAxis
+                    yAxisId="price"
+                    tick={{ fontSize: 11, fill: '#059669' }}
+                    stroke="#059669"
+                    unit="₹"
+                    domain={['dataMin - 80', 'dataMax + 80']}
+                  />
+                  <YAxis
+                    yAxisId="arr"
+                    orientation="right"
+                    tick={{ fontSize: 10, fill: '#94a3b8' }}
+                    stroke="#94a3b8"
+                    unit=" T"
+                    domain={[0, 'auto']}
+                  />
                   <Tooltip
-                    contentStyle={{ backgroundColor: '#ffffff', borderRadius: '1rem', border: '1px solid #cbd5e1', fontSize: '11px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                    formatter={(val) => [`₹${val.toLocaleString()} / quintal`, 'Modal Price']}
+                    content={({ active, payload }) => {
+                      if (active && payload && payload.length) {
+                        const d = payload[0].payload;
+                        return (
+                          <div className="bg-slate-950/95 backdrop-blur-md text-white p-3 rounded-2xl shadow-xl border border-white/10 text-xs space-y-1">
+                            <span className="font-bold text-slate-300 block border-b border-white/10 pb-1">{d.week}</span>
+                            <p className="text-emerald-400 font-bold">Modal Price: ₹{d.price.toLocaleString()} / quintal</p>
+                            {d.arrivals && (
+                              <p className="text-blue-300 font-semibold">Market Arrivals: {d.arrivals.toLocaleString()} MT</p>
+                            )}
+                          </div>
+                        );
+                      }
+                      return null;
+                    }}
+                  />
+                  <Legend verticalAlign="top" align="right" wrapperStyle={{ paddingBottom: 8, fontSize: 11 }} />
+                  <Bar
+                    yAxisId="arr"
+                    dataKey="arrivals"
+                    name="Arrivals (Tons)"
+                    fill="#cbd5e1"
+                    radius={[4, 4, 0, 0]}
+                    opacity={0.65}
                   />
                   <Area
+                    yAxisId="price"
                     type="monotone"
                     dataKey="price"
+                    name="Modal Price (₹/q)"
                     stroke="#059669"
-                    strokeWidth={2.5}
+                    strokeWidth={2.8}
                     fillOpacity={1}
-                    fill="url(#priceGradient)"
+                    fill="url(#priceGradientMandi)"
                   />
-                </AreaChart>
+                  <ReferenceLine
+                    yAxisId="price"
+                    y={mandi.modalPrice}
+                    stroke="#047857"
+                    strokeDasharray="3 3"
+                    label={{ value: `Current ₹${mandi.modalPrice}`, fill: '#047857', fontSize: 10 }}
+                  />
+                </ComposedChart>
               </ResponsiveContainer>
             </div>
           </div>

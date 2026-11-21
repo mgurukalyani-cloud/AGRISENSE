@@ -65,6 +65,7 @@ export async function fetchWeatherData(location = DEFAULT_REAL_LOCATION) {
       'et0_fao_evapotranspiration',
       'vapour_pressure_deficit',
       'wind_speed_10m',
+      'wind_gusts_10m',
       'wind_direction_10m',
       'soil_temperature_0cm'
     ].join(','),
@@ -157,6 +158,7 @@ export async function fetchWeatherData(location = DEFAULT_REAL_LOCATION) {
     precipitation: data.hourly.precipitation.slice(startIndex, endIndex),
     weather_code: data.hourly.weather_code.slice(startIndex, endIndex),
     wind_speed_10m: data.hourly.wind_speed_10m.slice(startIndex, endIndex),
+    wind_gusts_10m: data.hourly.wind_gusts_10m?.slice(startIndex, endIndex) || [],
     wind_direction_10m: data.hourly.wind_direction_10m.slice(startIndex, endIndex),
     vapour_pressure_deficit: data.hourly.vapour_pressure_deficit?.slice(startIndex, endIndex) || [],
     soil_temperature_0cm: data.hourly.soil_temperature_0cm?.slice(startIndex, endIndex) || [],

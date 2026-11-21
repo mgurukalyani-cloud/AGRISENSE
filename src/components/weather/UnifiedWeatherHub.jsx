@@ -254,6 +254,7 @@ export default function UnifiedWeatherHub({
             <HourlyForecastStrip
               hourly={hourly}
               tempUnit={tempUnit}
+              defaultView="split"
             />
           </div>
 

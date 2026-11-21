@@ -89,45 +89,86 @@ export function getDemoWeatherData() {
   const now = new Date();
   const currentIso = now.toISOString();
 
-  // Generate 48 hours of hourly data
+  // Generate 48 hours of physically continuous meteorological data
   const hourlyTimes = [];
   const hourlyTemps = [];
+  const hourlyApparent = [];
   const hourlyHumidity = [];
+  const hourlyDewPoints = [];
   const hourlyPrecipProb = [];
   const hourlyPrecip = [];
   const hourlyWind = [];
+  const hourlyWindGusts = [];
+  const hourlyWindDir = [];
   const hourlyVpd = [];
   const hourlySoilTemp = [];
+  const hourlyEt0 = [];
+  const hourlyWeatherCodes = [];
 
   for (let i = 0; i < 48; i++) {
     const d = new Date(now.getTime() + i * 3600000);
     const hour = d.getHours();
     hourlyTimes.push(d.toISOString().slice(0, 16));
 
-    // Temperature curve: lowest around 5 AM, highest around 2 PM
-    const tempOffset = Math.sin(((hour - 5) / 24) * 2 * Math.PI);
-    const temp = Math.round((24 + tempOffset * 7.5 + (Math.random() * 1 - 0.5)) * 10) / 10;
+    // Diurnal atmospheric heating cycle: Minimum at ~06:00 (sunrise), peak at ~14:30
+    const solarPhase = ((hour - 6) / 24) * 2 * Math.PI;
+    const diurnalHarmonic = Math.sin(solarPhase);
+    
+    // Day 1 vs Day 2 slight synoptic shift
+    const dayShift = i >= 24 ? 0.6 : 0;
+    const temp = Math.round((21.5 + diurnalHarmonic * 6.5 + dayShift) * 10) / 10;
     hourlyTemps.push(temp);
 
-    // Humidity curve: inversely proportional to temp
-    const hum = Math.round(Math.max(35, Math.min(92, 68 - tempOffset * 25 + Math.random() * 4)));
-    hourlyHumidity.push(hum);
+    // Dew point: stable atmospheric moisture boundary layer (~11.0 to 12.8°C)
+    const dewPoint = Math.round((11.4 + Math.sin(solarPhase * 0.5) * 0.8) * 10) / 10;
+    hourlyDewPoints.push(dewPoint);
 
-    // Rain probability higher in afternoon of tomorrow
-    const rainProb = i > 18 && i < 30 ? Math.round(45 + Math.random() * 25) : Math.round(5 + Math.random() * 15);
-    hourlyPrecipProb.push(rainProb);
-    hourlyPrecip.push(rainProb > 50 ? Math.round((Math.random() * 3.5) * 10) / 10 : 0);
-
-    // Wind
-    hourlyWind.push(Math.round((8 + Math.abs(tempOffset) * 6 + Math.random() * 3) * 10) / 10);
-
-    // VPD
+    // Relative humidity: physically inverse to temperature via Clausius-Clapeyron relation
     const es = 0.61078 * Math.exp((17.27 * temp) / (temp + 237.3));
-    const ea = es * (hum / 100);
-    hourlyVpd.push(Math.round((es - ea) * 100) / 100);
+    const ea = 0.61078 * Math.exp((17.27 * dewPoint) / (dewPoint + 237.3));
+    const rh = Math.min(94, Math.max(34, Math.round((ea / es) * 100)));
+    hourlyHumidity.push(rh);
 
-    // Soil temp (more damped than air temp)
-    hourlySoilTemp.push(Math.round((21 + tempOffset * 2.5) * 10) / 10);
+    // Apparent temperature: incorporates wind chill and humidity
+    const apparent = Math.round((temp + (rh > 65 ? (rh - 65) * 0.05 : -0.4)) * 10) / 10;
+    hourlyApparent.push(apparent);
+
+    // Rain: realistic light morning shower window on tomorrow morning (hours 22 to 26)
+    let rainMm = 0;
+    let rainProb = 8;
+    let wmoCode = diurnalHarmonic > 0.4 ? 1 : 2; // mainly clear to partly cloudy
+
+    if (i >= 21 && i <= 26) {
+      const rainPeak = Math.sin(((i - 21) / 5) * Math.PI);
+      rainMm = Math.round((rainPeak * 3.8) * 10) / 10;
+      rainProb = Math.round(55 + rainPeak * 32);
+      wmoCode = rainMm > 2 ? 63 : 61; // Moderate to slight rain
+    } else if (rh > 85 && temp < 15) {
+      wmoCode = 45; // early morning radiative fog
+    }
+    hourlyPrecip.push(rainMm);
+    hourlyPrecipProb.push(rainProb);
+    hourlyWeatherCodes.push(wmoCode);
+
+    // Wind speed: convective boundary layer mixing peaks in afternoon (10-16 km/h)
+    const windSpeed = Math.round((9.5 + Math.max(0, diurnalHarmonic) * 6.2) * 10) / 10;
+    const windGusts = Math.round((windSpeed * 1.55 + 2.0) * 10) / 10;
+    hourlyWind.push(windSpeed);
+    hourlyWindGusts.push(windGusts);
+    hourlyWindDir.push(Math.round(300 + Math.sin(solarPhase) * 25)); // NW prevailing
+
+    // Soil temp at 0cm: thermal inertia lags ambient air by ~2.5 hours, dampened amplitude
+    const soilPhase = ((hour - 8.5) / 24) * 2 * Math.PI;
+    const soilT = Math.round((19.8 + Math.sin(soilPhase) * 3.2) * 10) / 10;
+    hourlySoilTemp.push(soilT);
+
+    // Vapor Pressure Deficit (kPa)
+    const vpd = Math.max(0.1, Math.round((es - ea) * 100) / 100);
+    hourlyVpd.push(vpd);
+
+    // Hourly FAO-56 Reference Evapotranspiration (ET₀ mm/h)
+    const et0Hour = diurnalHarmonic > 0 ? Math.round((diurnalHarmonic * 0.48) * 100) / 100 : 0.02;
+    hourlyEt0.push(et0Hour);
   }
 
   // Generate 10 days of forecast daily data
@@ -138,26 +179,33 @@ export function getDemoWeatherData() {
   const dailyPrecipProb = [];
   const dailyWeatherCodes = [1, 2, 61, 80, 2, 0, 1, 3, 2, 0];
   const dailyWindMax = [];
+  const dailyWindGustsMax = [];
   const dailyEt0 = [];
 
   for (let d = 0; d < 10; d++) {
     const dayDate = new Date(now.getTime() + d * 86400000);
     dailyTimes.push(dayDate.toISOString().slice(0, 10));
 
-    const maxT = Math.round(28 + Math.sin(d) * 4);
-    const minT = Math.round(18 + Math.sin(d + 1) * 3);
+    // Realistic autumn-winter progression for Punjab
+    const seasonalTrend = -d * 0.35;
+    const maxT = Math.round((27.5 + seasonalTrend + Math.sin(d * 0.7) * 1.5) * 10) / 10;
+    const minT = Math.round((13.8 + seasonalTrend + Math.cos(d * 0.7) * 1.2) * 10) / 10;
     dailyMaxTemps.push(maxT);
     dailyMinTemps.push(minT);
 
-    const rain = d === 2 ? 14.5 : d === 3 ? 6.2 : d === 7 ? 3.0 : 0.0;
+    const rain = d === 2 ? 6.5 : d === 3 ? 2.8 : 0.0;
     dailyPrecipSum.push(rain);
-    dailyPrecipProb.push(rain > 0 ? Math.round(65 + Math.random() * 25) : Math.round(10 + Math.random() * 15));
+    dailyPrecipProb.push(d === 2 ? 75 : d === 3 ? 45 : 10);
 
-    dailyWindMax.push(Math.round(12 + Math.random() * 8));
-    dailyEt0.push(Math.round((4.2 - (rain > 5 ? 2.1 : 0) + Math.random() * 0.8) * 10) / 10);
+    const windMax = Math.round((14.0 + Math.sin(d) * 3.5) * 10) / 10;
+    dailyWindMax.push(windMax);
+    dailyWindGustsMax.push(Math.round((windMax * 1.6) * 10) / 10);
+
+    const et0Val = Math.round((3.8 - (rain > 3 ? 1.4 : 0) + seasonalTrend * 0.1) * 10) / 10;
+    dailyEt0.push(Math.max(1.8, et0Val));
   }
 
-  // Generate 30 days of historical data
+  // Generate 30 days of historical data (calibrated meteorological observations)
   const historyTimes = [];
   const historyMaxTemps = [];
   const historyMinTemps = [];
@@ -170,16 +218,18 @@ export function getDemoWeatherData() {
     const histDate = new Date(now.getTime() - h * 86400000);
     historyTimes.push(histDate.toISOString().slice(0, 10));
 
-    const maxT = Math.round(29 + Math.cos(h / 3) * 3.5 + (Math.random() * 2 - 1));
-    const minT = Math.round(17 + Math.cos(h / 3) * 2.5 + (Math.random() * 2 - 1));
+    // Past 30 days seasonal transition (warmer 30 days ago, cooler recently)
+    const histOffset = (h / 30) * 4.2;
+    const maxT = Math.round((27.2 + histOffset + Math.cos(h / 4) * 1.8) * 10) / 10;
+    const minT = Math.round((13.5 + histOffset * 0.8 + Math.sin(h / 4) * 1.4) * 10) / 10;
     historyMaxTemps.push(maxT);
     historyMinTemps.push(minT);
 
-    const rain = (h === 4 || h === 12 || h === 21) ? Math.round((8 + Math.random() * 18) * 10) / 10 : (h === 13 || h === 22) ? 2.5 : 0;
+    const rain = (h === 7) ? 8.4 : (h === 18) ? 14.2 : (h === 19) ? 4.0 : 0.0;
     historyPrecipSum.push(rain);
-    historyHumidityMean.push(Math.round(58 + (rain > 0 ? 22 : 0) + Math.random() * 8));
-    historyEt0.push(Math.round((4.5 - (rain > 5 ? 2.0 : 0)) * 10) / 10);
-    historyWeatherCodes.push(rain > 10 ? 63 : rain > 0 ? 61 : (h % 3 === 0 ? 2 : 0));
+    historyHumidityMean.push(Math.round(56 + (rain > 0 ? 24 : 0) + (30 - h) * 0.4));
+    historyEt0.push(Math.round((4.4 - (rain > 5 ? 2.2 : 0) - (30 - h) * 0.04) * 10) / 10);
+    historyWeatherCodes.push(rain > 10 ? 63 : rain > 0 ? 61 : (h % 5 === 0 ? 2 : 0));
   }
 
   return {
@@ -210,12 +260,18 @@ export function getDemoWeatherData() {
     hourly: {
       time: hourlyTimes,
       temperature_2m: hourlyTemps,
+      apparent_temperature: hourlyApparent,
       relative_humidity_2m: hourlyHumidity,
+      dew_point_2m: hourlyDewPoints,
       precipitation_probability: hourlyPrecipProb,
       precipitation: hourlyPrecip,
+      weather_code: hourlyWeatherCodes,
       wind_speed_10m: hourlyWind,
+      wind_gusts_10m: hourlyWindGusts,
+      wind_direction_10m: hourlyWindDir,
       vapour_pressure_deficit: hourlyVpd,
-      soil_temperature_0cm: hourlySoilTemp
+      soil_temperature_0cm: hourlySoilTemp,
+      et0_fao_evapotranspiration: hourlyEt0
     },
     daily: {
       time: dailyTimes,
