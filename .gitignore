@@ -17,6 +17,7 @@ dist-ssr
 backend/.env
 scratch-chrome*
 scratch-cdp*
+.chrome-headless-data/
 check_browser.mjs
 /*.png
 

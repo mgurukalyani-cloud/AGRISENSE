@@ -69,6 +69,19 @@ class UpdateOrderStatusModel(BaseModel):
     updated_by: Optional[str] = "ADMIN"
 
 
+class UpdateETAModel(BaseModel):
+    extra_minutes: int
+    reason: str
+    updated_by: Optional[str] = "ADMIN"
+
+
+class AssignPartnerModel(BaseModel):
+    partner_name: str
+    partner_phone: str
+    vehicle_number: Optional[str] = None
+    updated_by: Optional[str] = "ADMIN"
+
+
 # -------------------------------------------------------------
 # 1. Product Catalog Endpoints
 # -------------------------------------------------------------
@@ -273,6 +286,35 @@ def update_order_stage(order_id: str, payload: UpdateOrderStatusModel):
     )
     if not result.get("success"):
         raise HTTPException(status_code=400, detail=result.get("message", "Status update failed"))
+    return result
+
+
+@store_router.put("/admin/orders/{order_id}/eta")
+def update_delivery_eta(order_id: str, payload: UpdateETAModel):
+    """Adjusts estimated delivery arrival duration in minutes with a documented delay reason."""
+    result = svc.update_delivery_eta(
+        order_id=order_id,
+        extra_minutes=payload.extra_minutes,
+        reason=payload.reason,
+        updated_by=payload.updated_by or "ADMIN"
+    )
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("message", "ETA adjustment failed"))
+    return result
+
+
+@store_router.put("/admin/orders/{order_id}/partner")
+def assign_partner(order_id: str, payload: AssignPartnerModel):
+    """Assigns or updates the delivery personnel assigned to the order."""
+    result = svc.assign_delivery_partner(
+        order_id=order_id,
+        partner_name=payload.partner_name,
+        partner_phone=payload.partner_phone,
+        vehicle_number=payload.vehicle_number,
+        updated_by=payload.updated_by or "ADMIN"
+    )
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("message", "Partner assignment failed"))
     return result
 
 

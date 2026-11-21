@@ -253,6 +253,44 @@ def clear_cart(user_id: str) -> Dict[str, Any]:
 # -------------------------------------------------------------
 # 3. Checkout, Billing & Atomic Inventory Deduction
 # -------------------------------------------------------------
+def calculate_delivery_duration_minutes(delivery_address: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Calculates genuine minute-based delivery duration from mandi hub to farm.
+    Preparation time: 15 mins.
+    Hub-to-farm transit distance: 10-25 km, avg speed 30 km/h (2 mins per km).
+    """
+    village = (delivery_address.get("village") or "").lower()
+    mandal = (delivery_address.get("mandal") or "").lower()
+
+    # Distance estimation based on village/mandal location
+    distance_km = 14.5
+    if any(v in village or v in mandal for v in ["appannapet", "dharmaram"]):
+        distance_km = 11.0
+    elif any(v in village or v in mandal for v in ["peddapalli", "sultanabad"]):
+        distance_km = 17.5
+    elif any(v in village or v in mandal for v in ["karimnagar", "choppadandi"]):
+        distance_km = 22.0
+    elif any(v in village or v in mandal for v in ["manthani", "ramagundam"]):
+        distance_km = 28.0
+
+    prep_minutes = 15
+    transit_minutes = max(15, round(distance_km * 2.0))
+    total_duration_minutes = prep_minutes + transit_minutes
+
+    now_dt = datetime.datetime.now(datetime.timezone.utc)
+    arrival_dt = now_dt + datetime.timedelta(minutes=total_duration_minutes)
+
+    return {
+        "preparation_time_minutes": prep_minutes,
+        "delivery_distance_km": distance_km,
+        "estimated_duration_minutes": total_duration_minutes,
+        "estimated_arrival_timestamp": int(arrival_dt.timestamp() * 1000),
+        "estimated_delivery_iso": arrival_dt.isoformat(),
+        "min_duration_minutes": max(25, total_duration_minutes - 5),
+        "max_duration_minutes": total_duration_minutes + 10
+    }
+
+
 async def create_checkout_order(
     user_id: str,
     delivery_address: Dict[str, Any],
@@ -263,10 +301,11 @@ async def create_checkout_order(
     Executes ACID transaction to:
     1. Lock and validate inventory for each cart item.
     2. Compute exact invoice: subtotal, taxes, delivery, coupon discount, grand total.
-    3. Atomically decrement stock_quantity.
-    4. Insert order and order_items records.
-    5. Generate real Razorpay / UPI QR payment request.
-    6. Record initial audit status.
+    3. Calculate genuine minute-based delivery estimate (e.g. 45-60 minutes).
+    4. Atomically decrement stock_quantity.
+    5. Insert order and order_items records.
+    6. Generate real Razorpay / UPI QR payment request.
+    7. Record initial audit status.
     """
     now_dt = datetime.datetime.now(datetime.timezone.utc)
     now_iso = now_dt.isoformat()
@@ -329,26 +368,34 @@ async def create_checkout_order(
 
         grand_total = max(1.0, round(subtotal + delivery_fee - discount_total, 2))
 
-        # Estimated delivery date: 2 business days from order
-        est_delivery_dt = now_dt + datetime.timedelta(days=2, hours=4)
-        estimated_delivery = est_delivery_dt.isoformat()
+        # Genuine minute-based delivery duration calculation
+        delivery_calc = calculate_delivery_duration_minutes(delivery_address)
+        est_duration_minutes = delivery_calc["estimated_duration_minutes"]
+        est_arrival_timestamp = delivery_calc["estimated_arrival_timestamp"]
+        prep_time_minutes = delivery_calc["preparation_time_minutes"]
+        delivery_distance_km = delivery_calc["delivery_distance_km"]
+        estimated_delivery = delivery_calc["estimated_delivery_iso"]
 
         # Atomically deduct inventory
         for item in items:
             new_stock = item["stock_quantity"] - item["quantity"]
             cursor.execute("UPDATE products SET stock_quantity = ? WHERE id = ?", (new_stock, item["id"]))
 
-        # Insert Order
+        # Insert Order with minute delivery duration fields
         cursor.execute("""
         INSERT INTO orders (
             id, order_number, user_id, subtotal, tax_total, delivery_fee, discount_total,
             grand_total, subsidy_saved_total, payment_status, order_status,
-            delivery_address_json, delivery_instructions, estimated_delivery, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', 'PENDING_PAYMENT', ?, ?, ?, ?, ?)
+            delivery_address_json, delivery_instructions, estimated_delivery,
+            estimated_duration_minutes, estimated_arrival_timestamp, preparation_time_minutes,
+            delivery_distance_km, delay_minutes, delay_reason, assigned_partner_name, assigned_partner_phone,
+            created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', 'PENDING_PAYMENT', ?, ?, ?, ?, ?, ?, ?, 0, '', 'Kisan Express Hub Delivery', '+91 98480 33445', ?, ?)
         """, (
             order_id, order_number, user_id, subtotal, tax_total, delivery_fee, discount_total,
             grand_total, subsidy_saved, json.dumps(delivery_address), delivery_instructions or "",
-            estimated_delivery, now_iso, now_iso
+            estimated_delivery, est_duration_minutes, est_arrival_timestamp, prep_time_minutes,
+            delivery_distance_km, now_iso, now_iso
         ))
 
         # Insert Order Items
@@ -412,6 +459,11 @@ async def create_checkout_order(
         "grand_total": grand_total,
         "subsidy_saved": subsidy_saved,
         "estimated_delivery": estimated_delivery,
+        "estimated_duration_minutes": est_duration_minutes,
+        "estimated_arrival_timestamp": est_arrival_timestamp,
+        "preparation_time_minutes": prep_time_minutes,
+        "delivery_distance_km": delivery_distance_km,
+        "estimated_delivery_range": f"{delivery_calc['min_duration_minutes']}–{delivery_calc['max_duration_minutes']} minutes",
         "payment": {
             "payment_id": payment_id,
             "gateway_order_id": payment_res.get("gateway_order_id"),
@@ -648,12 +700,12 @@ def update_order_status(
 ) -> Dict[str, Any]:
     """
     Valid transitions:
-    CONFIRMED -> PROCESSING -> PACKED -> DISPATCHED -> OUT_FOR_DELIVERY -> DELIVERED
+    PENDING_PAYMENT -> PAYMENT_SUCCESS -> CONFIRMED -> PREPARING -> PACKED -> DISPATCHED -> OUT_FOR_DELIVERY -> DELIVERED
     or CANCELLED (restores stock inventory if cancelled before dispatch).
     """
     now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
     valid_statuses = [
-        "PENDING_PAYMENT", "CONFIRMED", "PROCESSING", "PACKED",
+        "PENDING_PAYMENT", "PAYMENT_SUCCESS", "CONFIRMED", "PREPARING", "PROCESSING", "PACKED",
         "DISPATCHED", "OUT_FOR_DELIVERY", "DELIVERED", "CANCELLED", "REFUNDED"
     ]
     if new_status not in valid_statuses:
@@ -681,6 +733,8 @@ def update_order_status(
         elif new_status == "DELIVERED":
             cursor.execute("UPDATE deliveries SET status = 'DELIVERED', delivered_at = ?, updated_at = ? WHERE order_id = ?", (now_iso, now_iso, order_id))
             cursor.execute("UPDATE orders SET delivered_at = ? WHERE id = ?", (now_iso, order_id))
+        else:
+            cursor.execute("UPDATE deliveries SET status = ?, updated_at = ? WHERE order_id = ?", (new_status, now_iso, order_id))
 
         cursor.execute("UPDATE orders SET order_status = ?, updated_at = ? WHERE id = ?", (new_status, now_iso, order_id))
 
@@ -693,6 +747,145 @@ def update_order_status(
         conn.commit()
 
     return {"success": True, "order_id": order_id, "new_status": new_status, "updated_at": now_iso}
+
+
+def update_delivery_eta(
+    order_id: str,
+    extra_minutes: int,
+    reason: str,
+    updated_by: str = "ADMIN"
+) -> Dict[str, Any]:
+    """
+    Adjusts the estimated delivery arrival time in minutes with a documented delay reason.
+    """
+    now_dt = datetime.datetime.now(datetime.timezone.utc)
+    now_iso = now_dt.isoformat()
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM orders WHERE id = ?", (order_id,))
+        order = cursor.fetchone()
+        if not order:
+            return {"success": False, "error": "ORDER_NOT_FOUND"}
+
+        cur_delay = int(order["delay_minutes"]) if ("delay_minutes" in order.keys() and order["delay_minutes"]) else 0
+        new_delay = cur_delay + extra_minutes
+
+        cur_duration = int(order["estimated_duration_minutes"]) if ("estimated_duration_minutes" in order.keys() and order["estimated_duration_minutes"]) else 45
+        new_duration = cur_duration + extra_minutes
+
+        cur_arrival = order["estimated_arrival_timestamp"] if ("estimated_arrival_timestamp" in order.keys() and order["estimated_arrival_timestamp"]) else None
+        if cur_arrival:
+            try:
+                new_arrival = int(cur_arrival) + (extra_minutes * 60 * 1000)
+            except (ValueError, TypeError):
+                new_arrival = int((now_dt + datetime.timedelta(minutes=new_duration)).timestamp() * 1000)
+        else:
+            new_arrival = int((now_dt + datetime.timedelta(minutes=new_duration)).timestamp() * 1000)
+
+        cursor.execute("""
+        UPDATE orders
+        SET delay_minutes = ?,
+            delay_reason = ?,
+            estimated_duration_minutes = ?,
+            estimated_arrival_timestamp = ?,
+            updated_at = ?
+        WHERE id = ?
+        """, (new_delay, reason, new_duration, new_arrival, now_iso, order_id))
+
+        cursor.execute("""
+        UPDATE deliveries
+        SET delay_minutes = ?,
+            delay_reason = ?,
+            estimated_duration_minutes = ?,
+            estimated_arrival_timestamp = ?,
+            updated_at = ?
+        WHERE order_id = ?
+        """, (new_delay, reason, new_duration, new_arrival, now_iso, order_id))
+
+        cursor.execute("""
+        INSERT INTO order_status_history (id, order_id, status, comment, created_by, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """, (
+            f"osh_{uuid.uuid4().hex[:12]}",
+            order_id,
+            order["order_status"],
+            f"Delivery ETA adjusted: +{extra_minutes} mins (Reason: {reason}). New estimated duration: {new_duration} mins.",
+            updated_by,
+            now_iso
+        ))
+
+        conn.commit()
+
+    return {
+        "success": True,
+        "order_id": order_id,
+        "delay_minutes": new_delay,
+        "delay_reason": reason,
+        "estimated_duration_minutes": new_duration,
+        "estimated_arrival_timestamp": new_arrival,
+        "updated_at": now_iso
+    }
+
+
+def assign_delivery_partner(
+    order_id: str,
+    partner_name: str,
+    partner_phone: str,
+    vehicle_number: Optional[str] = None,
+    updated_by: str = "ADMIN"
+) -> Dict[str, Any]:
+    """
+    Assigns or reassigns delivery personnel for the farm order dispatch.
+    """
+    now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM orders WHERE id = ?", (order_id,))
+        order = cursor.fetchone()
+        if not order:
+            return {"success": False, "error": "ORDER_NOT_FOUND"}
+
+        cursor.execute("""
+        UPDATE orders
+        SET assigned_partner_name = ?,
+            assigned_partner_phone = ?,
+            updated_at = ?
+        WHERE id = ?
+        """, (partner_name, partner_phone, now_iso, order_id))
+
+        cursor.execute("""
+        UPDATE deliveries
+        SET partner_name = ?,
+            partner_phone = ?,
+            vehicle_number = COALESCE(?, vehicle_number),
+            updated_at = ?
+        WHERE order_id = ?
+        """, (partner_name, partner_phone, vehicle_number, now_iso, order_id))
+
+        cursor.execute("""
+        INSERT INTO order_status_history (id, order_id, status, comment, created_by, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """, (
+            f"osh_{uuid.uuid4().hex[:12]}",
+            order_id,
+            order["order_status"],
+            f"Delivery partner assigned: {partner_name} ({partner_phone})",
+            updated_by,
+            now_iso
+        ))
+
+        conn.commit()
+
+    return {
+        "success": True,
+        "order_id": order_id,
+        "partner_name": partner_name,
+        "partner_phone": partner_phone,
+        "vehicle_number": vehicle_number,
+        "updated_at": now_iso
+    }
 
 
 # -------------------------------------------------------------

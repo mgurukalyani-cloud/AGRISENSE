@@ -52,6 +52,7 @@ server.listen(4390, '127.0.0.1', async () => {
     '--remote-debugging-port=9840',
     '--disable-gpu',
     '--no-first-run',
+    '--user-data-dir=' + path.join(ROOT, '.chrome-headless-data'),
     '--window-size=1440,1050',
     'http://127.0.0.1:4390/AGRISENSE/'
   ]);
@@ -98,15 +99,28 @@ server.listen(4390, '127.0.0.1', async () => {
       }
     };
 
-    // 1. Navigate to Agri Store tab
-    console.log('Navigating to Agri Store tab...');
+    // 1. Wait for page to finish loading and navigate to Agri Store tab
+    console.log('Waiting for NavigationTabs to render and clicking Agri Store...');
     await evalCode(`
-      (() => {
-        const btn = document.querySelector('button[data-tab-id="store"]') || 
-          Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('Agri Store'));
-        if (btn) { btn.click(); return true; }
-        return false;
-      })()
+      new Promise((resolve) => {
+        const interval = setInterval(() => {
+          const btn = document.querySelector('button[data-tab-id="store"]') || 
+            Array.from(document.querySelectorAll('button')).find(b => b.textContent && b.textContent.includes('Agri Store'));
+          if (btn) {
+            clearInterval(interval);
+            btn.click();
+            const checkStore = setInterval(() => {
+              const storeHeader = document.querySelector('h1');
+              if (storeHeader && storeHeader.textContent.includes('AgriSense Kisan')) {
+                clearInterval(checkStore);
+                resolve(true);
+              }
+            }, 150);
+            setTimeout(() => { clearInterval(checkStore); resolve(true); }, 5000);
+          }
+        }, 250);
+        setTimeout(() => { clearInterval(interval); resolve(false); }, 25000);
+      })
     `);
     await new Promise(r => setTimeout(r, 2000));
 
@@ -199,7 +213,7 @@ server.listen(4390, '127.0.0.1', async () => {
     console.log('Opening Tax Invoice...');
     await evalCode(`
       (() => {
-        const invBtn = Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('View / Print Invoice'));
+        const invBtn = Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('Invoice'));
         if (invBtn) { invBtn.click(); return true; }
         return false;
       })()
@@ -210,19 +224,34 @@ server.listen(4390, '127.0.0.1', async () => {
     await takeScreenshot('live-store-invoice-print.png');
 
     // 9. Close invoice and open Farmer Dashboard
-    console.log('Opening Farmer Dashboard...');
+    console.log('Closing invoice and opening Farmer Dashboard...');
     await evalCode(`
       (() => {
-        // Close modal
-        const closeBtns = Array.from(document.querySelectorAll('button')).filter(b => b.querySelector('svg'));
-        if (closeBtns.length > 0) closeBtns[closeBtns.length - 1].click();
+        const topModal = document.querySelector('.fixed.inset-0.z-50');
+        if (topModal) {
+          const closeBtn = topModal.querySelector('button.rounded-full');
+          if (closeBtn) closeBtn.click();
+        }
       })()
     `);
-    await new Promise(r => setTimeout(r, 1000));
+    await new Promise(r => setTimeout(r, 1200));
 
+    // Also close Order Tracking modal if still behind it
     await evalCode(`
       (() => {
-        const myOrdersBtn = Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('My Orders'));
+        const topModal = document.querySelector('.fixed.inset-0.z-50');
+        if (topModal) {
+          const closeBtn = topModal.querySelector('button.rounded-full');
+          if (closeBtn) closeBtn.click();
+        }
+      })()
+    `);
+    await new Promise(r => setTimeout(r, 1200));
+
+    // Click "My Orders" in Store header
+    await evalCode(`
+      (() => {
+        const myOrdersBtn = Array.from(document.querySelectorAll('button')).find(b => b.textContent && b.textContent.includes('My Orders'));
         if (myOrdersBtn) { myOrdersBtn.click(); return true; }
         return false;
       })()
@@ -233,18 +262,21 @@ server.listen(4390, '127.0.0.1', async () => {
     await takeScreenshot('live-store-farmer-dashboard.png');
 
     // 10. Close farmer dashboard and open Admin Operations Hub
-    console.log('Opening Admin Operations Hub...');
+    console.log('Closing farmer dashboard and opening Admin Operations Hub...');
     await evalCode(`
       (() => {
-        const closeBtn = Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('Close'));
-        if (closeBtn) closeBtn.click();
+        const topModal = document.querySelector('.fixed.inset-0.z-50');
+        if (topModal) {
+          const closeBtn = topModal.querySelector('button.rounded-full');
+          if (closeBtn) closeBtn.click();
+        }
       })()
     `);
-    await new Promise(r => setTimeout(r, 1000));
+    await new Promise(r => setTimeout(r, 1200));
 
     await evalCode(`
       (() => {
-        const adminBtn = Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('Operations Hub'));
+        const adminBtn = Array.from(document.querySelectorAll('button')).find(b => b.textContent && b.textContent.includes('Operations Hub'));
         if (adminBtn) { adminBtn.click(); return true; }
         return false;
       })()
@@ -253,6 +285,20 @@ server.listen(4390, '127.0.0.1', async () => {
 
     // Capture 8: Admin & Operations Hub
     await takeScreenshot('live-store-admin-dashboard.png');
+
+    // 11. Click "+ETA Mins" button on first order to demonstrate Delivery ETA Adjuster
+    console.log('Opening Delivery ETA Adjuster modal...');
+    await evalCode(`
+      (() => {
+        const etaBtn = Array.from(document.querySelectorAll('button')).find(b => b.textContent && b.textContent.includes('+ETA Mins'));
+        if (etaBtn) { etaBtn.click(); return true; }
+        return false;
+      })()
+    `);
+    await new Promise(r => setTimeout(r, 1200));
+
+    // Capture 9: ETA Adjuster Modal
+    await takeScreenshot('live-store-admin-eta-modal.png');
 
     console.log('All 8 live screenshots successfully captured!');
     ws.close();

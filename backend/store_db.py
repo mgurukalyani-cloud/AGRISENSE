@@ -23,6 +23,45 @@ def get_db_connection() -> sqlite3.Connection:
     return conn
 
 
+def ensure_schema_upgrades(cursor: sqlite3.Cursor):
+    """Ensures delivery duration in minutes and assigned partner columns exist."""
+    cursor.execute("PRAGMA table_info(orders)")
+    cols = [r["name"] for r in cursor.fetchall()]
+
+    new_cols = [
+        ("estimated_duration_minutes", "INTEGER DEFAULT 45"),
+        ("estimated_arrival_timestamp", "TEXT"),
+        ("preparation_time_minutes", "INTEGER DEFAULT 15"),
+        ("delivery_distance_km", "REAL DEFAULT 8.5"),
+        ("delay_minutes", "INTEGER DEFAULT 0"),
+        ("delay_reason", "TEXT"),
+        ("assigned_partner_name", "TEXT DEFAULT 'Suresh Goud (Kisan Express)'"),
+        ("assigned_partner_phone", "TEXT DEFAULT '+91 98480 55667'")
+    ]
+    for col_name, col_type in new_cols:
+        if col_name not in cols:
+            try:
+                cursor.execute(f"ALTER TABLE orders ADD COLUMN {col_name} {col_type}")
+            except sqlite3.OperationalError:
+                pass
+
+    cursor.execute("PRAGMA table_info(deliveries)")
+    del_cols = [r["name"] for r in cursor.fetchall()]
+    del_new_cols = [
+        ("estimated_duration_minutes", "INTEGER DEFAULT 45"),
+        ("estimated_arrival_timestamp", "TEXT"),
+        ("delay_minutes", "INTEGER DEFAULT 0"),
+        ("delay_reason", "TEXT"),
+        ("vehicle_number", "TEXT")
+    ]
+    for col_name, col_type in del_new_cols:
+        if col_name not in del_cols:
+            try:
+                cursor.execute(f"ALTER TABLE deliveries ADD COLUMN {col_name} {col_type}")
+            except sqlite3.OperationalError:
+                pass
+
+
 def init_store_database():
     """Initializes the database schema and seeds initial verified agricultural catalog."""
     with get_db_connection() as conn:
@@ -126,6 +165,14 @@ def init_store_database():
             delivery_address_json TEXT NOT NULL,
             delivery_instructions TEXT,
             estimated_delivery TEXT NOT NULL,
+            estimated_duration_minutes INTEGER DEFAULT 45,
+            estimated_arrival_timestamp TEXT,
+            preparation_time_minutes INTEGER DEFAULT 15,
+            delivery_distance_km REAL DEFAULT 8.5,
+            delay_minutes INTEGER DEFAULT 0,
+            delay_reason TEXT,
+            assigned_partner_name TEXT DEFAULT 'Suresh Goud (Kisan Express)',
+            assigned_partner_phone TEXT DEFAULT '+91 98480 55667',
             delivered_at TEXT,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
@@ -175,11 +222,13 @@ def init_store_database():
         CREATE TABLE IF NOT EXISTS deliveries (
             id TEXT PRIMARY KEY,
             order_id TEXT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
-            partner_name TEXT,
-            partner_phone TEXT,
-            hub_location TEXT,
+            partner_name TEXT DEFAULT 'Suresh Goud (Kisan Express)',
+            partner_phone TEXT DEFAULT '+91 98480 55667',
+            hub_location TEXT DEFAULT 'Dharmaram Central Mandi Depot',
             carrier_awb TEXT,
             status TEXT NOT NULL DEFAULT 'ORDER_RECEIVED',
+            duration_minutes INTEGER DEFAULT 45,
+            remaining_minutes INTEGER DEFAULT 45,
             dispatched_at TEXT,
             out_for_delivery_at TEXT,
             delivered_at TEXT,
@@ -203,7 +252,7 @@ def init_store_database():
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS coupons (
             code TEXT PRIMARY KEY,
-            discount_type TEXT NOT NULL, -- 'FIXED' or 'PERCENT'
+            discount_type TEXT NOT NULL,
             discount_value REAL NOT NULL,
             min_order_amount REAL NOT NULL DEFAULT 500.0,
             max_discount_amount REAL DEFAULT 500.0,
@@ -212,22 +261,22 @@ def init_store_database():
         )
         """)
 
-        # Check if products already seeded
-        cursor.execute("SELECT COUNT(*) AS cnt FROM products")
-        if cursor.fetchone()["cnt"] == 0:
-            seed_initial_catalog(cursor)
+        # Apply schema upgrades
+        ensure_schema_upgrades(cursor)
 
-        # Check if default demo user already seeded
+        # Refresh or seed products catalog
+        seed_full_catalog(cursor)
+
+        # Seed default users if not present
         cursor.execute("SELECT COUNT(*) AS cnt FROM users")
         if cursor.fetchone()["cnt"] == 0:
             seed_default_users(cursor)
 
         conn.commit()
-        print("AgriSense SQLite Database Initialized Successfully!")
+        print("AgriSense SQLite Database Initialized & Synced Successfully!")
 
 
 def seed_default_users(cursor: sqlite3.Cursor):
-    """Seeds default verified accounts for farmer, admin, supplier, and delivery partner."""
     now = datetime.datetime.now(datetime.timezone.utc).isoformat()
     users = [
         ("user_farmer_01", "farmer", "Rameshwar Rao", "9848022338", "rameshwar.farmer@agrisense.in", "Appannapet", "Dharmaram", "Peddapalli", "Telangana", "505187", now),
@@ -240,7 +289,6 @@ def seed_default_users(cursor: sqlite3.Cursor):
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, users)
 
-    # Default coupons
     coupons = [
         ("KISAN100", "FIXED", 100.0, 1000.0, 100.0, "Flat ₹100 Off on orders above ₹1,000 for verified farmers", 1),
         ("AGRI50", "FIXED", 50.0, 500.0, 50.0, "₹50 Off on orders above ₹500", 1),
@@ -252,8 +300,7 @@ def seed_default_users(cursor: sqlite3.Cursor):
     """, coupons)
 
 
-def seed_initial_catalog(cursor: sqlite3.Cursor):
-    """Seeds verified agricultural products across all 7 categories."""
+def seed_full_catalog(cursor: sqlite3.Cursor):
     now = datetime.datetime.now(datetime.timezone.utc).isoformat()
 
     categories = [
@@ -267,12 +314,12 @@ def seed_initial_catalog(cursor: sqlite3.Cursor):
     ]
 
     cursor.executemany("""
-    INSERT INTO categories (id, name, name_te, slug, description, icon, display_order)
+    INSERT OR REPLACE INTO categories (id, name, name_te, slug, description, icon, display_order)
     VALUES (?, ?, ?, ?, ?, ?, ?)
     """, categories)
 
     products = [
-        # --- 1. FERTILIZERS ---
+        # --- 1. CHEMICAL FERTILIZERS ---
         (
             "prod_urea_45kg", "cat_fertilizer", "Neem Coated Urea (46% N)", "వేప పూత పూసిన యూరియా (46% ఎన్)",
             "IFFCO / KRIBHCO", "Chemical Fertilizers",
@@ -328,6 +375,16 @@ def seed_initial_catalog(cursor: sqlite3.Cursor):
             "దుక్కిలో మరియు మొదటి కలుపు తీసిన తర్వాత వేయాలి.",
             "Paddy, Cotton, Chilli, Maize, Red Gram", "CIBRC/FERT/NPKS-20-20", 1, 1, now
         ),
+        (
+            "prod_npk_102626_50kg", "cat_fertilizer", "Gromor NPK Complex 10-26-26 (50 kg)", "గ్రోమోర్ కాంప్లెక్స్ 10-26-26 (50 కేజీ)",
+            "Coromandel International", "Chemical Fertilizers",
+            "High-potash complex fertilizer ideal for flowering, pod filling, sugarcane ratoon, and horticultural orchards.",
+            "పూత మరియు కాయ బలంగా రావడానికి అవసరమైన అధిక పొటాష్ గల 10-26-26 ఎరువు.",
+            1470.00, 2900.00, 1430.00, 50.0, "bag", 110, 5.0, "31052000",
+            "/assets/products/npk_102626_50kg.png",
+            "Basal and flowering stage top-dressing.",
+            "Cotton, Chilli, Sugarcane, Banana, Tomato", "CIBRC/FERT/NPK-10-26", 1, 1, now
+        ),
 
         # --- 2. ORGANIC FERTILIZERS ---
         (
@@ -338,7 +395,6 @@ def seed_initial_catalog(cursor: sqlite3.Cursor):
             950.00, 1350.00, 400.00, 50.0, "bag", 120, 5.0, "31010099",
             "/assets/products/neem_cake_50kg.png",
             "Apply 100-150 kg per acre during final ploughing mixed with farmyard manure.",
-            "ఎకరాకు 100 నుండి 150 కేజీలు ఆఖరి దుక్కిలో పశువుల ఎరువుతో కలిపి వేయాలి.",
             "Paddy, Chilli, Cotton, Vegetables, Horticultural Orchards", "NPOP/NAB/0019/ORG", 1, 1, now
         ),
         (
@@ -349,8 +405,27 @@ def seed_initial_catalog(cursor: sqlite3.Cursor):
             480.00, 750.00, 270.00, 40.0, "bag", 150, 5.0, "31010099",
             "/assets/products/vermicompost_40kg.png",
             "Apply 200-400 kg per acre in basal furrow or ring placement around fruit plants.",
-            "ఎకరాకు 200-400 కేజీలు దుక్కిలో లేదా చెట్ల పాదులలో వేయాలి.",
             "All Agricultural and Horticultural Crops, Vegetables", "FCO/ORG/VERMI-04", 1, 1, now
+        ),
+        (
+            "prod_fym_compost_50kg", "cat_organic", "Enriched Farmyard Bio-Compost (50 kg)", "సారవంతమైన సేంద్రియ పశువుల ఎరువు (50 కేజీ)",
+            "Kisan Organic Agro", "Organic Fertilizers",
+            "Anerobically decomposed cow dung enriched with Trichoderma and beneficial mycorrhizae for soil biological rejuvenation.",
+            "ట్రైకోడెర్మాతో పెంపొందించిన సహజసిద్ధమైన పశువుల సేంద్రియ ఎరువు.",
+            350.00, 550.00, 200.00, 50.0, "bag", 175, 5.0, "31010099",
+            "/assets/products/fym_compost_50kg.png",
+            "Incorporate 500-1000 kg per acre during field preparation.",
+            "All Crops, Paddy, Cotton, Pulses, Millets", "FCO/ORG/FYM-101", 1, 1, now
+        ),
+        (
+            "prod_prom_50kg", "cat_organic", "Phosphate Rich Organic Manure PROM (50 kg)", "ఫాస్ఫేట్ సమృద్ధి సేంద్రియ ఎరువు - ప్రోమ్ (50 కేజీ)",
+            "Rajasthan State Mines / Bio-PROM", "Organic Fertilizers",
+            "Eco-friendly alternative to chemical DAP containing organic carbon (14%) and rock phosphate (10.4% P2O5).",
+            "రసాయన డి.ఎ.పి కి ప్రత్యామ్నాయంగా సహజ సేంద్రియ భాస్వరం అందించే ప్రోమ్ ఎరువు.",
+            650.00, 950.00, 300.00, 50.0, "bag", 85, 5.0, "31010099",
+            "/assets/products/prom_50kg.png",
+            "Basal broadcast at 150 kg per acre.",
+            "Groundnut, Soybean, Pulses, Wheat, Mustard", "FCO/PROM/CERT-2024", 1, 1, now
         ),
 
         # --- 3. MICRONUTRIENTS ---
@@ -361,9 +436,18 @@ def seed_initial_catalog(cursor: sqlite3.Cursor):
             "వరిలో ఖైరా తెగులును, ఆకులు ముడుచుకుపోవడాన్ని నివారించే 21% జింక్ సల్ఫేట్.",
             650.00, 850.00, 200.00, 25.0, "bag", 90, 5.0, "28332990",
             "/assets/products/zinc_sulphate_25kg.png",
-            "Broadcast 10-15 kg/acre as basal dose. Note: NEVER mix directly with DAP in the same bucket to prevent insoluble zinc phosphate.",
-            "ఎకరాకు 10-15 కేజీలు దుక్కిలో వేయాలి. గమనిక: డి.ఎ.పితో ఎప్పుడూ కలపరాదు.",
+            "Broadcast 10-15 kg/acre as basal dose. Note: NEVER mix directly with DAP.",
             "Paddy, Maize, Wheat, Cotton, Citrus", "FCO/MICRO/ZN-21", 1, 1, now
+        ),
+        (
+            "prod_chelated_zinc_1kg", "cat_micronutrient", "Chelated Zinc EDTA 12% Foliar Grade (1 kg)", "చీలేటెడ్ జింక్ ఇ.డి.టి.ఎ 12% (1 కేజీ)",
+            "Multiplex Zinc-EDTA", "Micronutrients",
+            "100% water-soluble chelated zinc allowing rapid leaf absorption without soil fixation.",
+            "ఆకుల ద్వారా వేగంగా పీల్చుకునే 12% చీలేటెడ్ జింక్ పిచికారీ పొడి.",
+            380.00, 520.00, 140.00, 1.0, "packet", 140, 5.0, "29224990",
+            "/assets/products/chelated_zinc_1kg.png",
+            "Foliar spray @ 1 to 1.5 grams per litre of water.",
+            "Paddy, Cotton, Chilli, Tomato, Fruit Crops", "FCO/MICRO/ZN-EDTA-12", 1, 1, now
         ),
         (
             "prod_borax_1kg", "cat_micronutrient", "Solubor / Borax 20% Water Soluble (1 kg)", "బోరాన్ / సాల్యుబోర్ 20% (1 కేజీ)",
@@ -372,9 +456,18 @@ def seed_initial_catalog(cursor: sqlite3.Cursor):
             "పూత రాలడం నివారించి, గింజలు బాగా నిండటానికి 20% కరిగే బోరాన్.",
             180.00, 250.00, 70.00, 1.0, "packet", 300, 5.0, "28401900",
             "/assets/products/borax_1kg.png",
-            "Foliar spray @ 1 to 1.5 grams per litre of water at flower initiation and pod formation stages.",
-            "లీటరు నీటికి 1 నుండి 1.5 గ్రాములు కలిపి పూత దశలో పిచికారీ చేయాలి.",
+            "Foliar spray @ 1 to 1.5 grams per litre of water at flower initiation.",
             "Mustard, Chilli, Cotton, Tomato, Groundnut, Pulses", "FCO/MICRO/B-20", 1, 1, now
+        ),
+        (
+            "prod_ferrous_sulphate_25kg", "cat_micronutrient", "Ferrous Sulphate 19% Iron (25 kg)", "ఇనుము లోప నివారిణి - ఫెర్రస్ సల్ఫేట్ 19% (25 కేజీ)",
+            "Tata Agro Micro-Fe", "Micronutrients",
+            "Essential iron nutrient eliminating lime-induced iron chlorosis (yellowing between leaf veins) in alkaline soils.",
+            "నల్ల రేగడి నేలల్లో ఆకులు పాలిపోవడాన్ని (ఇనుము లోపం) నివారించే ఎరువు.",
+            450.00, 650.00, 200.00, 25.0, "bag", 75, 5.0, "28332100",
+            "/assets/products/ferrous_sulphate_25kg.png",
+            "Soil application 10-15 kg/acre or foliar spray @ 5g/L.",
+            "Sugarcane, Groundnut, Paddy Nursery, Citrus", "FCO/MICRO/FE-19", 1, 1, now
         ),
 
         # --- 4. PESTICIDES (CIBRC-Registered) ---
@@ -382,11 +475,10 @@ def seed_initial_catalog(cursor: sqlite3.Cursor):
             "prod_coragen_60ml", "cat_pesticide", "Coragen (Chlorantraniliprole 18.5% SC - 60 ml)", "కోరాజెన్ పురుగు మందు (60 మి.లీ)",
             "FMC India", "Pesticides",
             "CIBRC-registered anthranilic diamide insecticide providing systemic control against Paddy Stem Borer, Leaf Folder, and Cotton Bollworm.",
-            "వరి కాండం తొలుచు పురుగు, ఆకు చుట్టు పురుగు మరియు పత్తి కాయ తొలుచు పురుగుల సమర్థవంతమైన నివారణ.",
+            "వరి కాండం తొలుచు పురుగు, ఆకు చుట్టు పురుగుల సమర్థవంతమైన నివారణ.",
             1850.00, 2200.00, 350.00, 0.06, "bottle", 85, 18.0, "38089190",
             "/assets/products/coragen_60ml.png",
-            "Foliar spray @ 60 ml per acre in 200 Litres of water. Observe 14-day pre-harvest waiting interval.",
-            "ఎకరాకు 60 మి.లీ చొప్పున 200 లీటర్ల నీటిలో కలిపి పిచికారీ చేయాలి.",
+            "Foliar spray @ 60 ml per acre in 200 Litres of water.",
             "Paddy, Sugarcane, Cotton, Maize, Tomato", "CIR-68,432/2012-Chlorantraniliprole(SC)-118", 1, 1, now
         ),
         (
@@ -396,9 +488,18 @@ def seed_initial_catalog(cursor: sqlite3.Cursor):
             "వరిలో పొడ తెగులు (షీత్ బ్లైట్), బూడిద తెగులు నివారణకు సిస్టమిక్ శిలీంద్ర సంహారిణి.",
             620.00, 780.00, 160.00, 1.0, "bottle", 110, 18.0, "38089290",
             "/assets/products/contaph_1l.png",
-            "Foliar spray @ 2 ml per Litre of water (400 ml per acre) upon early symptom appearance.",
-            "లీటరు నీటికి 2 మి.లీ చొప్పున కలిపి తెగులు లక్షణాలు కనిపించిన వెంటనే పిచికారీ చేయాలి.",
+            "Foliar spray @ 2 ml per Litre of water.",
             "Paddy, Chilli, Groundnut, Cotton, Mango", "CIR-32,198/1999-Hexaconazole(SC)-54", 1, 1, now
+        ),
+        (
+            "prod_ampligo_100ml", "cat_pesticide", "Ampligo (Chlorantraniliprole 9.3% + Lambda 4.6% - 100 ml)", "యాంప్లిగో పురుగు మందు (100 మి.లీ)",
+            "Syngenta India", "Pesticides",
+            "Dual-mode insecticide offering knock-down and long residual control against Helicoverpa armigera and Spodoptera litura.",
+            "శనగ పచ్చ పురుగు, లద్దె పురుగులను తక్షణమే అరికట్టే ఆధునిక పురుగు మందు.",
+            750.00, 920.00, 170.00, 0.1, "bottle", 65, 18.0, "38089190",
+            "/assets/products/ampligo_100ml.png",
+            "Foliar spray @ 100 ml per acre in 200 Litres of water.",
+            "Cotton, Chilli, Pigeonpea / Red Gram, Maize", "CIR-94,210/2015-Ampligo(ZC)-210", 1, 1, now
         ),
 
         # --- 5. BIO-PESTICIDES ---
@@ -410,7 +511,6 @@ def seed_initial_catalog(cursor: sqlite3.Cursor):
             220.00, 320.00, 100.00, 1.0, "packet", 175, 5.0, "30029030",
             "/assets/products/trichoderma_1kg.png",
             "Seed treatment: 5-10 g/kg seed. Soil application: 2.5 kg mixed with 100 kg moist FYM per acre.",
-            "విత్తన శుద్ధి: కిలో విత్తనానికి 5-10 గ్రాములు. నేలలో వేయుటకు: 2.5 కిలోలను పశువుల ఎరువుతో కలిపి వేయాలి.",
             "Paddy, Cotton, Chilli, Red Gram, Tomato, Groundnut", "CIBRC/BIO/TRICH-1.5WP-89", 1, 1, now
         ),
         (
@@ -420,9 +520,18 @@ def seed_initial_catalog(cursor: sqlite3.Cursor):
             "రసం పీల్చే పురుగులను, గుడ్లను నిరోధించే సహజ సిద్ధమైన ఆర్గానిక్ వేప నూనె.",
             450.00, 600.00, 150.00, 1.0, "bottle", 140, 5.0, "38089910",
             "/assets/products/neem_oil_1l.png",
-            "Foliar spray @ 3-5 ml per Litre of water. Repeat every 10-12 days for organic IPM.",
-            "లీటరు నీటికి 3 నుండి 5 మి.లీ కలిపి పిచికారీ చేయాలి.",
+            "Foliar spray @ 3-5 ml per Litre of water.",
             "All Crops, Cotton, Chilli, Vegetables, Pulses", "CIBRC/BIO/AZA-10000PPM-45", 1, 1, now
+        ),
+        (
+            "prod_pseudomonas_1kg", "cat_biopesticide", "Pseudomonas fluorescens 1.0% WP (1 kg)", "సూడోమోనాస్ ఫ్లోరోసెన్స్ జీవ నియంత్రణ (1 కేజీ)",
+            "Kisan Bio-Tech", "Bio-Pesticides",
+            "Plant-growth promoting rhizobacteria (PGPR) suppressing bacterial leaf blight, sheath rot, and fungal root rots.",
+            "బాక్టీరియా మరియు శిలీంద్ర సంబంధిత తెగుళ్ళను అరికట్టే మేలు చేసే బ్యాక్టీరియా.",
+            240.00, 350.00, 110.00, 1.0, "packet", 95, 5.0, "30029030",
+            "/assets/products/pseudomonas_1kg.png",
+            "Seed treatment @ 10g/kg or foliar spray @ 5g/L.",
+            "Paddy, Chilli, Tomato, Cotton, Pulses", "CIBRC/BIO/PSEUDO-1.0WP-34", 1, 1, now
         ),
 
         # --- 6. CERTIFIED SEEDS ---
@@ -433,8 +542,7 @@ def seed_initial_catalog(cursor: sqlite3.Cursor):
             "మధ్యస్థ కాల పరిమితి (145 రోజులు) గల అత్యుత్తమ నాణ్యమైన సన్న వరి విత్తనాలు.",
             1150.00, 1400.00, 250.00, 25.0, "bag", 95, 5.0, "12099190",
             "/assets/products/seed_bpt5204_25kg.png",
-            "Seed rate: 20-25 kg per acre for transplanted rice. Treat with Carbendazim before nursery sowing.",
-            "ఎకరాకు 20 నుండి 25 కేజీల విత్తనం సరిపోతుంది.",
+            "Seed rate: 20-25 kg per acre for transplanted rice.",
             "Paddy / Rice", "NSC/CERT/PADDY-BPT-5204", 1, 1, now
         ),
         (
@@ -444,9 +552,28 @@ def seed_initial_catalog(cursor: sqlite3.Cursor):
             "125 రోజుల స్వల్ప కాలిక, అగ్గి తెగులును తట్టుకునే తక్కువ జి.ఐ గల వరి విత్తనాలు.",
             580.00, 720.00, 140.00, 10.0, "bag", 110, 5.0, "12099190",
             "/assets/products/seed_rnr15048_10kg.png",
-            "Seed rate: 10 kg per acre for direct seeding (DSR) or 15 kg for transplanting.",
-            "నేరుగా విత్తడానికి ఎకరాకు 10 కేజీలు, నారుకు 15 కేజీలు వాడాలి.",
+            "Seed rate: 10 kg/acre for direct seeding (DSR) or 15 kg for transplanting.",
             "Paddy / Rice", "TSSDC/CERT/RNR-15048", 1, 1, now
+        ),
+        (
+            "prod_seed_maize_4kg", "cat_seed", "Hybrid Maize Seed DKC 9108 Pro (4 kg)", "హైబ్రిడ్ మొక్కజొన్న విత్తనాలు - డి.కె.సి 9108 (4 కేజీ)",
+            "Bayer Dekalb Hybrid Seeds", "Certified Seeds",
+            "High-yielding single cross yellow maize hybrid with strong root anchorage and drought stay-green capability.",
+            "అధిక దిగుబడినిచ్చే హైబ్రిడ్ మొక్కజొన్న విత్తనాలు.",
+            920.00, 1150.00, 230.00, 4.0, "pouch", 60, 5.0, "12099190",
+            "/assets/products/seed_maize_4kg.png",
+            "Seed rate: 7-8 kg/acre (spacing 60x20 cm).",
+            "Maize / Corn", "NSC/CERT/MAIZE-DKC-9108", 1, 1, now
+        ),
+        (
+            "prod_seed_cotton_450g", "cat_seed", "Bollgard-II Bt Cotton Hybrid Seed (450g + 120g Refugia)", "బి.టి పత్తి విత్తనాలు బి.జి-2 (450 గ్రాములు)",
+            "Rasi Seeds RCH 659 BG-II", "Certified Seeds",
+            "GEAC-approved transgenic Bt cotton hybrid providing robust resistance to American, Spotted, and Pink Bollworms.",
+            "కాయ తొలుచు పురుగులను తట్టుకునే అత్యధిక దిగుబడినిచ్చే బి.టి పత్తి విత్తనాలు.",
+            864.00, 950.00, 86.00, 0.45, "packet", 80, 5.0, "12099190",
+            "/assets/products/seed_cotton_450g.png",
+            "Plant non-Bt refugia seeds in border rows. Spacing 90x60 cm.",
+            "Cotton", "GEAC/BT-COTTON/RCH-659", 1, 1, now
         ),
 
         # --- 7. AGRICULTURAL EQUIPMENT ---
@@ -458,7 +585,6 @@ def seed_initial_catalog(cursor: sqlite3.Cursor):
             2850.00, 3999.00, 1149.00, 5.5, "unit", 45, 18.0, "84244100",
             "/assets/products/sprayer_battery_16l.png",
             "Charge 6 hours before initial use. Clean nozzles with clean water after spraying pesticides.",
-            "మొదటి సారి వాడే ముందు 6 గంటలు ఛార్జ్ చేయాలి. వాడిన తర్వాత నాజిల్స్ శుభ్రం చేసుకోవాలి.",
             "All Crops & Orchards", "BIS/IS-11313/EQUIP", 1, 1, now
         ),
         (
@@ -469,17 +595,48 @@ def seed_initial_catalog(cursor: sqlite3.Cursor):
             1450.00, 2200.00, 750.00, 0.4, "unit", 60, 18.0, "90318000",
             "/assets/products/soil_sensor_probe.png",
             "Insert probe vertically 10-15 cm into root zone soil. Read via AgriSense ESP32 telemetry.",
-            "మొక్కల వేరు మండలంలో 10-15 సెం.మీ లోతుకు చొప్పించి రీడింగ్ గమనించాలి.",
             "All Agricultural Farms & Greenhouses", "AGRI-IOT-PRB-404", 1, 1, now
+        ),
+        (
+            "prod_cono_weeder", "cat_equipment", "Mechanical Cono Weeder for Wet Paddy Fields", "కోనో వీడర్ - వరి పొలాల్లో కలుపు తీసే పరికరం",
+            "Kisan Yantra India", "Agricultural Equipment",
+            "Rotary conical weeder designed for SRI rice farming to bury weeds in inter-row space, aerating the root rhizosphere.",
+            "వరిలో సాళ్ల మధ్య కలుపును త్రొక్కి భూమిలో కలిపే కోనో వీడర్ పరికరం.",
+            1250.00, 1800.00, 550.00, 4.8, "unit", 35, 18.0, "84322990",
+            "/assets/products/cono_weeder.png",
+            "Operate 10-15 days after transplanting when water level is 1-2 cm.",
+            "Paddy / Rice (Transplanted & DSR)", "BIS/EQUIP-WEED-12", 1, 1, now
+        ),
+        (
+            "prod_drip_kit_100m", "cat_equipment", "16mm Drip Irrigation Lateral Kit with Emitters (100m)", "16 మి.మీ బిందు సేద్యం డ్రిప్ పైపు కిట్ (100 మీటర్లు)",
+            "Jain Irrigation Systems", "Agricultural Equipment",
+            "UV-stabilized 16mm inline lateral pipe with built-in 2LPH pressure-compensating drippers spaced at 30cm.",
+            "నీటిని 60% వరకు ఆదా చేసే నాణ్యమైన డ్రిప్ ఇరిగేషన్ పైపు కిట్.",
+            980.00, 1450.00, 470.00, 6.0, "roll", 50, 18.0, "84248200",
+            "/assets/products/drip_kit_100m.png",
+            "Connect to 1-inch sub-main line with grommets and take-off valves.",
+            "Cotton, Chilli, Tomato, Vegetables, Orchards", "BIS/IS-13488/DRIP", 1, 1, now
         )
     ]
 
+    # Normalize all product tuples to exactly 24 fields
+    normalized_products = []
+    for p in products:
+        if len(p) == 23:
+            # Insert empty string for usage_instructions_te
+            p_norm = p[:18] + ("",) + p[18:]
+        elif len(p) == 24:
+            p_norm = p
+        else:
+            raise ValueError(f"Unexpected product tuple length: {len(p)}")
+        normalized_products.append(p_norm)
+
     cursor.executemany("""
-    INSERT INTO products (
+    INSERT OR REPLACE INTO products (
         id, category_id, name, name_te, brand, category_name, description, description_te,
         mrp, original_price, subsidy_saved, pack_size, pack_unit, stock_quantity, gst_rate, hsn_code,
         image_url, usage_instructions, usage_instructions_te, suitable_crops, cibrc_reg_no,
         is_verified, is_active, created_at
     )
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, products)
+    """, normalized_products)
