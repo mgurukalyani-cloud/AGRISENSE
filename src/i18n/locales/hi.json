@@ -289,5 +289,18 @@
     "targetAlert": "लक्ष्य अलर्ट",
     "protected": "संरक्षित",
     "uncertain": "अनिश्चित"
+  },
+  "nav": {
+    "home": "होम",
+    "weather": "मौसम",
+    "crops": "फसल सिफारिश",
+    "market": "मंडी भाव",
+    "soil": "मृदा स्वास्थ्य",
+    "assistant": "AI सहायक",
+    "planning": "फसल योजना",
+    "alerts": "चेतावनी",
+    "calculators": "कैलकुलेटर",
+    "myFarm": "मेरा खेत",
+    "settings": "सेटिंग्स"
   }
 }

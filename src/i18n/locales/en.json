@@ -13,7 +13,6 @@
     "animalRepellent": "Animal Sound AI",
     "leafDisease": "Leaf Disease Detection",
     "farmInsights": "Farm Insights",
-
     "voiceAssistant": "Voice Assistant",
     "platformModules": "Platform Modules",
     "settings": "Preferences & Data Sources",
@@ -346,5 +345,18 @@
     "targetAlert": "Target Alert",
     "protected": "Protected",
     "uncertain": "Uncertain"
+  },
+  "nav": {
+    "home": "Home",
+    "weather": "Weather",
+    "crops": "Crop Matcher",
+    "market": "Market Prices",
+    "soil": "Soil Health",
+    "assistant": "AI Assistant",
+    "planning": "Crop Planning",
+    "alerts": "Alerts",
+    "calculators": "Calculators",
+    "myFarm": "My Farm",
+    "settings": "Settings"
   }
 }

@@ -35,6 +35,7 @@ export default function VoiceFarmingAssistant({
   historicalWeather,
   plantHealthResult,
   location,
+  initialQuery = '',
   onClose,
   isModal = false
 }) {
@@ -56,7 +57,7 @@ export default function VoiceFarmingAssistant({
 
   // Conversation history for multi-turn questions & follow-ups
   const [conversationHistory, setConversationHistory] = useState([]);
-  const [textInput, setTextInput] = useState('');
+  const [textInput, setTextInput] = useState(initialQuery || '');
 
   // Audio speech rate: 0.95 (normal) vs 0.80 (slower for rural/elderly farmers)
   const [speechSpeed, setSpeechSpeed] = useState(0.95);
@@ -427,7 +428,7 @@ export default function VoiceFarmingAssistant({
             <div>
               <div className="flex items-center space-x-2">
                 <h2 className="text-base sm:text-xl font-bold tracking-tight">
-                  {t('voice.title', 'AgriSense Voice Farming Assistant')}
+                  {t('voice.title', 'AgriSense AI — Your Farming Companion')}
                 </h2>
                 <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-emerald-600/80 border border-emerald-400/40 text-emerald-100">
                   22 Languages
