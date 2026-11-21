@@ -7,27 +7,33 @@ import {
   VolumeX,
   RotateCcw,
   Sparkles,
-  HelpCircle,
   AlertCircle,
   CheckCircle2,
   X,
-  Droplets,
-  CloudRain,
-  Sprout,
-  ShieldAlert,
-  ChevronDown,
-  Gauge,
-  Radio,
-  TrendingUp,
-  Coins,
-  Scale,
   Send,
   MessageSquare,
-  Trash2
+  Trash2,
+  Copy,
+  Check,
+  Key,
+  Cpu,
+  Bot,
+  User,
+  ExternalLink,
+  ChevronDown,
+  Layers,
+  Info,
+  RefreshCw,
+  PlusCircle
 } from 'lucide-react';
 import { INDIAN_LANGUAGES, getLanguageByCode } from '../../i18n/languages';
 import { voiceAssistantService } from '../../services/voiceAssistantService';
 import { farmTelemetryService } from '../../services/farmTelemetryService';
+import MarkdownRenderer from './MarkdownRenderer';
+
+const CHAT_STORAGE_KEY = 'agrisense_chat_conversation_v2';
+const API_KEY_OVERRIDE_KEY = 'agrisense_api_key_override';
+const PROVIDER_OVERRIDE_KEY = 'agrisense_provider_override';
 
 export default function VoiceFarmingAssistant({
   currentWeather,
@@ -40,38 +46,111 @@ export default function VoiceFarmingAssistant({
 }) {
   const { t, i18n } = useTranslation();
 
-  // Selected language for speech interaction (defaults to website language)
+  // Selected language for speech & LLM responses
   const [selectedLang, setSelectedLang] = useState(i18n.language || 'en');
   const [langCapabilities, setLangCapabilities] = useState(
     voiceAssistantService.getLanguageCapabilities(i18n.language || 'en')
   );
 
-  // Interaction State: 'idle' | 'listening' | 'processing' | 'speaking' | 'error'
+  // Assistant State: 'idle' | 'listening' | 'processing' | 'error'
   const [assistantState, setAssistantState] = useState('idle');
-  const [recognizedQuestion, setRecognizedQuestion] = useState('');
-  const [interimTranscript, setInterimTranscript] = useState('');
-  const [answerData, setAnswerData] = useState(null);
   const [errorMessage, setErrorMessage] = useState(null);
   const [lastFailedQuestion, setLastFailedQuestion] = useState(null);
+  const [interimTranscript, setInterimTranscript] = useState('');
 
-  // Conversation history for multi-turn questions & follow-ups
-  const [conversationHistory, setConversationHistory] = useState([]);
+  // Conversation history persisted in localStorage
+  const [conversationHistory, setConversationHistory] = useState(() => {
+    try {
+      const saved = localStorage.getItem(CHAT_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {
+      console.warn('Failed to parse saved chat history:', e);
+    }
+    return [
+      {
+        id: 'welcome',
+        role: 'assistant',
+        content: `👋 Hello! I am your **AgriSense AI Assistant**.\n\nI can answer questions across **General Knowledge**, **Science**, **Computer Programming**, **Mathematics**, and **Precision Agriculture**. Feel free to ask me anything or try follow-up questions!`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        provider: 'AgriSense AI'
+      }
+    ];
+  });
+
   const [textInput, setTextInput] = useState('');
-
-  // Audio speech rate: 0.95 (normal) vs 0.80 (slower for rural/elderly farmers)
-  const [speechSpeed, setSpeechSpeed] = useState(0.95);
   const [isSpeakingActive, setIsSpeakingActive] = useState(false);
+  const [currentlySpeakingId, setCurrentlySpeakingId] = useState(null);
 
-  // Real-time telemetry snapshot
+  // Backend status: checks live provider and configured keys
+  const [backendStatus, setBackendStatus] = useState({
+    checked: false,
+    is_configured: false,
+    provider: null,
+    active_model: null,
+    message: null
+  });
+
+  // API Key Settings Modal
+  const [showConfigModal, setShowConfigModal] = useState(false);
+  const [apiKeyInput, setApiKeyInput] = useState(() => localStorage.getItem(API_KEY_OVERRIDE_KEY) || '');
+  const [providerChoice, setProviderChoice] = useState(() => localStorage.getItem(PROVIDER_OVERRIDE_KEY) || 'gemini');
+
+  // Copy message state tracking
+  const [copiedMsgId, setCopiedMsgId] = useState(null);
+
+  // Telemetry snapshot
   const [telemetry, setTelemetry] = useState({
     zones: farmTelemetryService.getIrrigationZones(),
     waterTank: farmTelemetryService.getWaterTankStatus(),
     soilAnalysis: farmTelemetryService.getSoilMeasurements()
   });
 
+  const messagesEndRef = useRef(null);
+  const textareaRef = useRef(null);
   const isMountedRef = useRef(true);
 
-  // Sync telemetry with real Open-Meteo current weather
+  // Auto-scroll to latest message
+  const scrollToBottom = useCallback((smooth = true) => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto' });
+    }
+  }, []);
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [conversationHistory, assistantState, scrollToBottom]);
+
+  // Persist conversation history to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(conversationHistory));
+    } catch (e) {
+      console.warn('Failed to persist chat history:', e);
+    }
+  }, [conversationHistory]);
+
+  // Check backend status on mount
+  const checkStatus = useCallback(async () => {
+    const status = await voiceAssistantService.getStatus();
+    if (isMountedRef.current) {
+      setBackendStatus({
+        checked: true,
+        is_configured: status.is_configured || false,
+        provider: status.provider || null,
+        active_model: status.active_model || null,
+        message: status.message || null
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    checkStatus();
+  }, [checkStatus]);
+
+  // Sync telemetry with current weather
   useEffect(() => {
     if (currentWeather) {
       farmTelemetryService.syncWithWeatherData(currentWeather);
@@ -83,20 +162,12 @@ export default function VoiceFarmingAssistant({
     }
   }, [currentWeather]);
 
-  // Update language capability information when language changes
+  // Sync language capabilities
   useEffect(() => {
     const caps = voiceAssistantService.getLanguageCapabilities(selectedLang);
     setLangCapabilities(caps);
   }, [selectedLang]);
 
-  // Keep selected language synchronized if website language changes (unless overridden by user)
-  useEffect(() => {
-    if (i18n.language && i18n.language !== selectedLang) {
-      setSelectedLang(i18n.language);
-    }
-  }, [i18n.language, selectedLang]);
-
-  // Clean up speech recognition & synthesis on unmount
   useEffect(() => {
     isMountedRef.current = true;
     return () => {
@@ -106,90 +177,102 @@ export default function VoiceFarmingAssistant({
     };
   }, []);
 
-  // Answer generation via AI Assistant Backend and automatic text-to-speech
-  const processQuestion = useCallback(
-    async (questionText, isRetry = false) => {
-      if (!questionText || questionText.trim() === '') return;
+  // Process user message via genuine LLM backend
+  const handleSendMessage = async (textToSend) => {
+    const query = (textToSend || textInput || '').trim();
+    if (!query) return;
 
-      const trimmedQ = questionText.trim();
-      setAssistantState('processing');
-      setErrorMessage(null);
-      setRecognizedQuestion(trimmedQ);
+    voiceAssistantService.stopSpeaking();
+    setIsSpeakingActive(false);
+    setCurrentlySpeakingId(null);
+    setErrorMessage(null);
+    setAssistantState('processing');
+    setTextInput('');
 
-      try {
-        const res = await voiceAssistantService.askAssistant({
-          query: trimmedQ,
-          conversationHistory,
-          langCode: selectedLang,
-          currentWeather,
-          dailyWeather,
-          historicalWeather,
-          farmTelemetry: telemetry,
-          plantHealthResult,
-          location
-        });
+    const userMsgId = `user-${Date.now()}`;
+    const userMessage = {
+      id: userMsgId,
+      role: 'user',
+      content: query,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
 
-        if (!isMountedRef.current) return;
+    // Append user message immediately
+    const updatedHistory = [...conversationHistory, userMessage];
+    setConversationHistory(updatedHistory);
 
-        if (!res.success) {
-          setAssistantState('error');
-          setErrorMessage(res.message || 'AI Assistant service unavailable. Please retry.');
-          setLastFailedQuestion(trimmedQ);
-          return;
-        }
+    // Prepare previous turns for LLM multi-turn context (exclude initial welcome)
+    const contextForLLM = updatedHistory
+      .filter((m) => m.id !== 'welcome')
+      .map((m) => ({
+        role: m.role === 'user' ? 'user' : 'assistant',
+        content: m.content
+      }));
 
-        setAnswerData(res);
-        setErrorMessage(null);
-        setLastFailedQuestion(null);
-        setAssistantState('speaking');
-        setIsSpeakingActive(true);
+    try {
+      const res = await voiceAssistantService.askAssistant({
+        query,
+        conversationHistory: contextForLLM.slice(-10),
+        langCode: selectedLang,
+        currentWeather,
+        dailyWeather,
+        historicalWeather,
+        farmTelemetry: telemetry,
+        plantHealthResult,
+        location,
+        apiKeyOverride: apiKeyInput.trim() || null,
+        providerOverride: providerChoice || null
+      });
 
-        // Append to conversation history for multi-turn context
-        setConversationHistory((prev) => [
-          ...prev,
-          { role: 'user', content: trimmedQ },
-          { role: 'assistant', content: res.speechText || res.answer || '' }
-        ]);
+      if (!isMountedRef.current) return;
 
-        // Speak aloud using TTS
-        voiceAssistantService.speakText({
-          text: res.speechText || res.answer,
-          langCode: selectedLang,
-          speed: speechSpeed,
-          onStart: () => {
-            if (isMountedRef.current) {
-              setIsSpeakingActive(true);
-            }
-          },
-          onEnd: () => {
-            if (isMountedRef.current) {
-              setIsSpeakingActive(false);
-              setAssistantState('idle');
-            }
-          },
-          onError: () => {
-            if (isMountedRef.current) {
-              setIsSpeakingActive(false);
-              setAssistantState('idle');
-            }
-          }
-        });
-      } catch (err) {
-        if (isMountedRef.current) {
-          setAssistantState('error');
-          setErrorMessage(err.message || 'An unexpected error occurred while communicating with the AI assistant.');
-          setLastFailedQuestion(trimmedQ);
-        }
+      if (!res.success) {
+        setAssistantState('error');
+        setErrorMessage(res.message || 'LLM communication error. Please check your API key or connection.');
+        setLastFailedQuestion(query);
+        return;
       }
-    },
-    [conversationHistory, currentWeather, dailyWeather, historicalWeather, location, plantHealthResult, selectedLang, speechSpeed, telemetry]
-  );
 
-  // Start Voice Listening (STT)
-  const handleStartListening = () => {
+      // Successful LLM response
+      const assistantMsgId = `ai-${Date.now()}`;
+      const assistantMessage = {
+        id: assistantMsgId,
+        role: 'assistant',
+        content: res.answer,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        provider: res.provider ? `${res.provider.toUpperCase()} (${res.model || 'LLM'})` : 'AI Assistant',
+        model: res.model
+      };
+
+      setConversationHistory((prev) => [...prev, assistantMessage]);
+      setAssistantState('idle');
+      setLastFailedQuestion(null);
+
+      // Re-check backend status
+      checkStatus();
+    } catch (err) {
+      if (isMountedRef.current) {
+        setAssistantState('error');
+        setErrorMessage(err.message || 'An unexpected error occurred while communicating with the AI assistant.');
+        setLastFailedQuestion(query);
+      }
+    }
+  };
+
+  // Keyboard Enter handler
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
+    }
+  };
+
+  // Start Voice Input (STT)
+  const handleToggleVoice = () => {
     if (assistantState === 'listening') {
       voiceAssistantService.stopListening();
       setAssistantState('idle');
+      setInterimTranscript('');
       return;
     }
 
@@ -201,629 +284,557 @@ export default function VoiceFarmingAssistant({
     const started = voiceAssistantService.startListening({
       langCode: selectedLang,
       onStart: () => {
-        if (isMountedRef.current) {
-          setAssistantState('listening');
-        }
+        if (isMountedRef.current) setAssistantState('listening');
       },
-      onInterim: (interim) => {
-        if (isMountedRef.current) {
-          setInterimTranscript(interim);
-        }
-      },
-      onFinal: (final) => {
-        if (isMountedRef.current) {
-          setRecognizedQuestion(final);
-          setInterimTranscript('');
-          processQuestion(final);
+      onResult: ({ finalTranscript, interimTranscript: interim }) => {
+        if (!isMountedRef.current) return;
+        setInterimTranscript(interim);
+        if (finalTranscript) {
+          setTextInput(finalTranscript);
+          handleSendMessage(finalTranscript);
         }
       },
       onError: (err) => {
-        if (isMountedRef.current) {
-          setAssistantState('error');
-          setErrorMessage(err.message || 'Speech recognition error.');
+        if (!isMountedRef.current) return;
+        setAssistantState('idle');
+        setInterimTranscript('');
+        if (err.error !== 'no-speech') {
+          setErrorMessage(`Microphone error (${err.error || 'speech failed'}). You can type your question directly.`);
         }
       },
       onEnd: () => {
         if (isMountedRef.current && assistantState === 'listening') {
           setAssistantState('idle');
+          setInterimTranscript('');
         }
       }
     });
 
-    if (!started && !voiceAssistantService.isSTTSupported()) {
-      setAssistantState('error');
-      setErrorMessage(
-        t('voice.noSTT', 'Speech recognition is not supported in this browser. Please use Chrome/Edge or tap one of the question buttons below.')
-      );
+    if (!started) {
+      setErrorMessage('Speech recognition is not supported in this browser. Please type your message.');
     }
   };
 
-  // Stop active speech playback
-  const handleStopSpeaking = () => {
-    voiceAssistantService.stopSpeaking();
-    setIsSpeakingActive(false);
-    setAssistantState('idle');
-  };
-
-  // Repeat speech playback
-  const handleRepeatAudio = () => {
-    if (!answerData?.speechText) return;
+  // Speak aloud an AI response
+  const handleSpeakMessage = (msgId, text) => {
+    if (currentlySpeakingId === msgId && isSpeakingActive) {
+      voiceAssistantService.stopSpeaking();
+      setIsSpeakingActive(false);
+      setCurrentlySpeakingId(null);
+      return;
+    }
 
     voiceAssistantService.stopSpeaking();
-    setAssistantState('speaking');
     setIsSpeakingActive(true);
+    setCurrentlySpeakingId(msgId);
 
-    voiceAssistantService.speakText({
-      text: answerData.speechText,
+    voiceAssistantService.speak({
+      text,
       langCode: selectedLang,
-      speed: speechSpeed,
       onStart: () => setIsSpeakingActive(true),
       onEnd: () => {
         setIsSpeakingActive(false);
-        setAssistantState('idle');
+        setCurrentlySpeakingId(null);
       },
       onError: () => {
         setIsSpeakingActive(false);
-        setAssistantState('idle');
+        setCurrentlySpeakingId(null);
       }
     });
   };
 
-  // Toggle voice speed: Normal (0.95x) vs Slower (0.80x)
-  const handleToggleSpeed = () => {
-    const newSpeed = speechSpeed < 0.9 ? 0.95 : 0.80;
-    setSpeechSpeed(newSpeed);
-
-    // If currently speaking, restart with new speed
-    if (isSpeakingActive && answerData?.speechText) {
-      voiceAssistantService.stopSpeaking();
-      voiceAssistantService.speakText({
-        text: answerData.speechText,
-        langCode: selectedLang,
-        speed: newSpeed,
-        onStart: () => setIsSpeakingActive(true),
-        onEnd: () => setIsSpeakingActive(false)
-      });
+  // Copy message text to clipboard
+  const handleCopyMessage = (msgId, content) => {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(content);
+      setCopiedMsgId(msgId);
+      setTimeout(() => setCopiedMsgId(null), 2000);
     }
   };
 
-  // Ask another question
-  const handleAskAnother = () => {
+  // Start New Chat (clears active session history)
+  const handleNewChat = () => {
     voiceAssistantService.stopSpeaking();
     setIsSpeakingActive(false);
-    setRecognizedQuestion('');
-    setInterimTranscript('');
-    setAnswerData(null);
-    setAssistantState('idle');
+    setCurrentlySpeakingId(null);
     setErrorMessage(null);
-  };
-
-  // Reset full conversation and state
-  const handleResetConversation = () => {
-    voiceAssistantService.stopSpeaking();
-    setIsSpeakingActive(false);
-    setRecognizedQuestion('');
-    setInterimTranscript('');
-    setAnswerData(null);
-    setConversationHistory([]);
     setAssistantState('idle');
-    setErrorMessage(null);
-    setLastFailedQuestion(null);
-  };
 
-  // Quick question pills in current selected language
-  const getQuickQuestions = () => {
-    if (selectedLang === 'te') {
-      return [
-        { icon: Sprout, text: 'ఈ సీజన్‌లో ఏ పంట వేయాలి?' },
-        { icon: Droplets, text: 'తక్కువ నీరు అవసరమయ్యే పంటలు ఏవి?' },
-        { icon: Coins, text: 'ఒక ఎకరానికి ఎంత ఖర్చు అవుతుంది?' },
-        { icon: TrendingUp, text: 'సమీప మార్కెట్లలో తాజా ధరలు ఏమిటి?' },
-        { icon: Scale, text: 'పత్తి, మొక్కజొన్న, పప్పు ధాన్యాలను పోల్చండి.' },
-        { icon: ShieldAlert, text: 'ఏ పంటలో ఆర్థిక నష్టం తక్కువ?' },
-        { icon: CloudRain, text: 'రేపు వర్షం పడుతుందా?' },
-        { icon: Droplets, text: 'ఏ జోన్‌కు నీరు కావాలి?' },
-        { icon: Gauge, text: 'నీటి ట్యాంక్ ఎంత ఉంది?' },
-        { icon: HelpCircle, text: 'ఆకు వ్యాధి ఫలితం ఏమిటి?' }
-      ];
-    }
-    if (selectedLang === 'hi') {
-      return [
-        { icon: Sprout, text: 'इस मौसम में कौन सी फसल बोएं?' },
-        { icon: Droplets, text: 'किन फसलों में कम पानी लगता है?' },
-        { icon: Coins, text: 'एक एकड़ में कितना खर्च आएगा?' },
-        { icon: TrendingUp, text: 'नजदीकी मंडियों में ताजा भाव क्या हैं?' },
-        { icon: Scale, text: 'कपास, मक्का और दालों की तुलना करें।' },
-        { icon: ShieldAlert, text: 'किस विकल्प में वित्तीय जोखिम कम है?' },
-        { icon: CloudRain, text: 'क्या कल बारिश होगी?' },
-        { icon: Droplets, text: 'किस जोन में पानी चाहिए?' },
-        { icon: Gauge, text: 'पानी की टंकी का स्तर क्या है?' },
-        { icon: HelpCircle, text: 'पत्ती की बीमारी का क्या मतलब है?' }
-      ];
-    }
-    if (selectedLang === 'mr') {
-      return [
-        { icon: Sprout, text: 'या हंगामात कोणते पीक पेरावे?' },
-        { icon: Droplets, text: 'कमी पाण्यात येणारी पिके कोणती?' },
-        { icon: Coins, text: 'एका एकरासाठी किती खर्च येईल?' },
-        { icon: TrendingUp, text: 'जवळच्या बाजारपेठेत चालू भाव काय आहेत?' },
-        { icon: Scale, text: 'कापूस, मका आणि कडधान्यांची तुलना करा.' },
-        { icon: ShieldAlert, text: 'कोणत्या पिकामध्ये आर्थिक धोका कमी आहे?' },
-        { icon: CloudRain, text: 'उद्या पाऊस पडेल का?' },
-        { icon: Droplets, text: 'कोणत्या झोनला पाणी हवे आहे?' }
-      ];
-    }
-    if (selectedLang === 'ta') {
-      return [
-        { icon: Sprout, text: 'இந்த பருவத்தில் என்ன பயிர் நடலாம்?' },
-        { icon: Droplets, text: 'குறைந்த நீர் தேவைப்படும் பயிர்கள் எவை?' },
-        { icon: Coins, text: 'ஒரு ஏக்கருக்கு எவ்வளவு செலவு ஆகும்?' },
-        { icon: TrendingUp, text: 'அருகிலுள்ள சந்தைகளில் புதிய விலை என்ன?' },
-        { icon: Scale, text: 'பருத்தி, சோளம் மற்றும் பருப்பு வகைகளை ஒப்பிடுக.' },
-        { icon: ShieldAlert, text: 'எந்த பயிரில் நிதி ஆபத்து குறைவு?' },
-        { icon: CloudRain, text: 'நாளை மழை பெய்யுமா?' },
-        { icon: Droplets, text: 'எந்த பகுதிக்கு தண்ணீர் தேவை?' }
-      ];
-    }
-    if (selectedLang === 'bn') {
-      return [
-        { icon: Sprout, text: 'এই মৌসুমে কোন ফসল রোপণ করব?' },
-        { icon: Droplets, text: 'কোন ফসলে কম জল প্রয়োজন?' },
-        { icon: Coins, text: 'এক একরে কত খরচ হতে পারে?' },
-        { icon: TrendingUp, text: 'কাছের বাজারে বর্তমান দর কত?' },
-        { icon: CloudRain, text: 'কাল কি বৃষ্টি হবে?' },
-        { icon: Droplets, text: 'কোন জোনে জল লাগবে?' }
-      ];
-    }
-    if (selectedLang === 'kn') {
-      return [
-        { icon: Sprout, text: 'ಈ ಋತುವಿನಲ್ಲಿ ಯಾವ ಬೆಳೆ ಬಿತ್ತನೆ ಮಾಡಬೇಕು?' },
-        { icon: Droplets, text: 'ಕಡಿಮೆ ನೀರು ಬೇಕಾಗುವ ಬೆಳೆಗಳು ಯಾವುವು?' },
-        { icon: Coins, text: 'ಒಂದು ಎಕರೆಗೆ ಎಷ್ಟು ಖರ್ಚಾಗುತ್ತದೆ?' },
-        { icon: TrendingUp, text: 'ಹತ್ತಿರದ ಮಾರುಕಟ್ಟೆಗಳಲ್ಲಿ ಇತ್ತೀಚಿನ ಬೆಲೆಗಳು ಯಾವುವು?' },
-        { icon: CloudRain, text: 'ನಾಳೆ ಮಳೆಯಾಗುವುದೇ?' },
-        { icon: Droplets, text: 'ಯಾವ ವಲಯಕ್ಕೆ ನೀರು ಬೇಕು?' }
-      ];
-    }
-    if (selectedLang === 'gu') {
-      return [
-        { icon: Sprout, text: 'આ સિઝનમાં કયો પાક વાવવો જોઈએ?' },
-        { icon: Droplets, text: 'કયા પાકમાં ઓછું પાણી જોઈએ?' },
-        { icon: Coins, text: 'એક એકરમાં કેટલો ખર્ચ થશે?' },
-        { icon: TrendingUp, text: 'નજીકના માર્કેટ યાર્ડમાં તાજા ભાવ શું છે?' },
-        { icon: CloudRain, text: 'કાલે વરસાદ પડશે?' },
-        { icon: Droplets, text: 'કયા ઝોનમાં પાણી જોઈએ?' }
-      ];
-    }
-
-    // Default English
-    return [
-      { icon: Sprout, text: 'Which crop should I sow this season?' },
-      { icon: Droplets, text: 'Which crops require less water?' },
-      { icon: Coins, text: 'How much money might I need for one acre?' },
-      { icon: TrendingUp, text: 'What are the latest prices in nearby markets?' },
-      { icon: Scale, text: 'Compare cotton, maize and pulses for my farm.' },
-      { icon: ShieldAlert, text: 'Which option has lower financial risk?' },
-      { icon: CloudRain, text: 'Will it rain tomorrow?' },
-      { icon: Droplets, text: 'Which irrigation zone needs water?' },
-      { icon: Gauge, text: 'What is the water tank level?' },
-      { icon: Sprout, text: 'What is my soil pH and quality?' },
-      { icon: Radio, text: 'Can I spray pesticides today?' },
-      { icon: HelpCircle, text: 'What does my leaf disease scan mean?' }
+    const freshWelcome = [
+      {
+        id: `welcome-${Date.now()}`,
+        role: 'assistant',
+        content: `🌱 **New conversation started.**\n\nHow can I help you today? Ask any question about **artificial intelligence**, **programming**, **science**, **math**, or **farming**.`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        provider: 'AgriSense AI'
+      }
     ];
+    setConversationHistory(freshWelcome);
+    localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(freshWelcome));
   };
 
-  const currentLangMeta = getLanguageByCode(selectedLang);
+  // Clear all conversation history
+  const handleClearHistory = () => {
+    if (window.confirm('Are you sure you want to clear your conversation history?')) {
+      handleNewChat();
+    }
+  };
+
+  // Save in-app API key override
+  const handleSaveConfig = () => {
+    if (apiKeyInput.trim()) {
+      localStorage.setItem(API_KEY_OVERRIDE_KEY, apiKeyInput.trim());
+      localStorage.setItem(PROVIDER_OVERRIDE_KEY, providerChoice);
+    } else {
+      localStorage.removeItem(API_KEY_OVERRIDE_KEY);
+      localStorage.removeItem(PROVIDER_OVERRIDE_KEY);
+    }
+    setShowConfigModal(false);
+    setErrorMessage(null);
+    checkStatus();
+  };
+
+  // Sample prompt chips
+  const samplePrompts = [
+    'What is artificial intelligence?',
+    'What are its applications?',
+    'Explain photosynthesis',
+    'Write a Java program to check prime numbers',
+    'What is the difference between HTML and CSS?',
+    'Which crops require less water in Rabi season?',
+    'Can I spray pesticide tomorrow?'
+  ];
 
   return (
-    <div className={`relative ${isModal ? 'max-w-3xl w-full mx-auto' : 'w-full space-y-6 animate-in fade-in duration-300'}`}>
-      <div className="bg-white rounded-3xl shadow-xl border border-emerald-900/20 overflow-hidden flex flex-col">
-        {/* Header Ribbon */}
-        <div className="p-4 sm:p-6 bg-gradient-to-r from-emerald-950 via-emerald-900 to-green-950 text-white flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center text-white shadow-lg shadow-emerald-900/40 shrink-0">
-              <Mic className="w-5 h-5 sm:w-6 sm:h-6" />
-            </div>
-            <div>
-              <div className="flex items-center space-x-2">
-                <h2 className="text-base sm:text-xl font-bold tracking-tight">
-                  {t('voice.title', 'AgriSense Voice Farming Assistant')}
-                </h2>
-                <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-emerald-600/80 border border-emerald-400/40 text-emerald-100">
-                  22 Languages
+    <div className={`flex flex-col bg-slate-950 text-white rounded-3xl border border-emerald-500/25 shadow-2xl overflow-hidden ${isModal ? 'max-h-[90vh] h-[780px]' : 'min-h-[720px]'}`}>
+      
+      {/* 1. Header Toolbar */}
+      <div className="p-4 sm:p-5 bg-gradient-to-r from-emerald-950 via-[#072518] to-slate-950 border-b border-emerald-800/40 flex items-center justify-between gap-3 shrink-0">
+        <div className="flex items-center space-x-3">
+          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center text-white shadow-md shadow-emerald-700/30 ring-2 ring-emerald-400/40">
+            <Bot className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <div className="flex items-center space-x-2">
+              <h2 className="text-base sm:text-lg font-black tracking-tight text-white">
+                AgriSense AI Assistant
+              </h2>
+              {/* Connection Status Pill */}
+              {backendStatus.is_configured ? (
+                <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-900/80 text-emerald-300 border border-emerald-500/40">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  <span>{backendStatus.provider?.toUpperCase()} • {backendStatus.active_model}</span>
                 </span>
+              ) : (
+                <button
+                  onClick={() => setShowConfigModal(true)}
+                  className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-900/60 text-amber-300 border border-amber-500/40 hover:bg-amber-800/70 cursor-pointer transition-colors"
+                >
+                  <AlertCircle className="w-3 h-3 text-amber-400" />
+                  <span>Configure API Key</span>
+                </button>
+              )}
+            </div>
+            <p className="text-[11px] text-emerald-300/80 font-medium">
+              Real LLM Conversational Intelligence • Multi-Turn Memory • 22 Indian Languages
+            </p>
+          </div>
+        </div>
+
+        {/* Toolbar Buttons */}
+        <div className="flex items-center space-x-2">
+          {/* New Chat Button */}
+          <button
+            onClick={handleNewChat}
+            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-emerald-900/60 hover:bg-emerald-800/80 text-emerald-200 border border-emerald-700/50 text-xs font-bold transition-all cursor-pointer shadow-xs"
+            title="Start a new chat session with fresh context"
+          >
+            <PlusCircle className="w-3.5 h-3.5 text-emerald-400" />
+            <span className="hidden sm:inline">New Chat</span>
+          </button>
+
+          {/* API Key Settings Button */}
+          <button
+            onClick={() => setShowConfigModal(true)}
+            className="p-2 rounded-xl bg-white/10 hover:bg-white/15 text-slate-300 hover:text-white border border-white/10 transition-colors cursor-pointer"
+            title="Configure LLM Provider (Gemini / Groq / OpenAI)"
+          >
+            <Key className="w-4 h-4 text-emerald-400" />
+          </button>
+
+          {/* Clear History Button */}
+          <button
+            onClick={handleClearHistory}
+            className="p-2 rounded-xl bg-white/10 hover:bg-rose-950/50 text-slate-300 hover:text-rose-400 border border-white/10 hover:border-rose-800/50 transition-colors cursor-pointer"
+            title="Clear conversation history"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+
+          {/* Language Selector Dropdown */}
+          <select
+            value={selectedLang}
+            onChange={(e) => setSelectedLang(e.target.value)}
+            className="px-2.5 py-1.5 rounded-xl bg-slate-900 border border-emerald-700/50 text-emerald-200 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer"
+          >
+            {INDIAN_LANGUAGES.map((l) => (
+              <option key={l.code} value={l.code} className="bg-slate-900 text-white">
+                {l.nativeName} ({l.code.toUpperCase()})
+              </option>
+            ))}
+          </select>
+
+          {/* Close Button if Modal */}
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white transition-colors cursor-pointer ml-1"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* 2. Chat Message Feed (Scrollable) */}
+      <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 scrollbar-thin scrollbar-thumb-emerald-800/60 bg-[#07130e]/70">
+        {conversationHistory.map((msg) => {
+          const isUser = msg.role === 'user';
+          return (
+            <div
+              key={msg.id}
+              className={`flex items-start space-x-3 ${isUser ? 'flex-row-reverse space-x-reverse' : ''}`}
+            >
+              {/* Avatar */}
+              <div
+                className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 shadow-sm ${
+                  isUser
+                    ? 'bg-gradient-to-tr from-emerald-600 to-teal-500 text-white'
+                    : 'bg-emerald-950 text-emerald-300 border border-emerald-700/60'
+                }`}
+              >
+                {isUser ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4 text-emerald-400" />}
               </div>
-              <p className="text-xs text-emerald-300/90">
-                {t('voice.tagline', 'Speak naturally in your native Indian language for real-time farm guidance')}
-              </p>
+
+              {/* Message Content Bubble */}
+              <div
+                className={`max-w-[85%] sm:max-w-[80%] rounded-2xl p-4 shadow-md transition-all ${
+                  isUser
+                    ? 'bg-gradient-to-r from-emerald-700 via-emerald-800 to-teal-800 text-white rounded-tr-xs'
+                    : 'bg-[#0f281e] text-slate-100 border border-emerald-800/50 rounded-tl-xs shadow-emerald-950/40'
+                }`}
+              >
+                {/* Header Meta Info on AI Message */}
+                {!isUser && (
+                  <div className="flex items-center justify-between gap-2 border-b border-emerald-800/40 pb-2 mb-2 text-[10px] text-emerald-400 font-mono">
+                    <span className="font-bold flex items-center space-x-1.5">
+                      <Sparkles className="w-3 h-3 text-emerald-300" />
+                      <span>{msg.provider || 'AgriSense AI'}</span>
+                    </span>
+                    <span className="text-slate-400">{msg.timestamp}</span>
+                  </div>
+                )}
+
+                {/* Body Content */}
+                {isUser ? (
+                  <p className="text-xs sm:text-sm font-medium leading-relaxed whitespace-pre-wrap">
+                    {msg.content}
+                  </p>
+                ) : (
+                  <MarkdownRenderer content={msg.content} />
+                )}
+
+                {/* Footer Controls for AI Message */}
+                {!isUser && (
+                  <div className="flex items-center justify-end space-x-2 pt-3 mt-3 border-t border-emerald-800/30 text-xs">
+                    {/* Copy Response Button */}
+                    <button
+                      onClick={() => handleCopyMessage(msg.id, msg.content)}
+                      className="flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-emerald-950/70 hover:bg-emerald-900 text-emerald-300 hover:text-white transition-colors text-[11px] cursor-pointer"
+                      title="Copy response to clipboard"
+                    >
+                      {copiedMsgId === msg.id ? (
+                        <>
+                          <Check className="w-3 h-3 text-emerald-400" />
+                          <span className="text-emerald-400 font-bold">Copied!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3 h-3" />
+                          <span>Copy</span>
+                        </>
+                      )}
+                    </button>
+
+                    {/* Listen Aloud Button (TTS) */}
+                    <button
+                      onClick={() => handleSpeakMessage(msg.id, msg.content)}
+                      className={`flex items-center space-x-1 px-2.5 py-1 rounded-lg transition-colors text-[11px] cursor-pointer ${
+                        currentlySpeakingId === msg.id && isSpeakingActive
+                          ? 'bg-emerald-600 text-white font-bold animate-pulse'
+                          : 'bg-emerald-950/70 hover:bg-emerald-900 text-emerald-300 hover:text-white'
+                      }`}
+                      title={currentlySpeakingId === msg.id && isSpeakingActive ? 'Stop reading' : 'Read aloud in selected language'}
+                    >
+                      {currentlySpeakingId === msg.id && isSpeakingActive ? (
+                        <>
+                          <VolumeX className="w-3 h-3" />
+                          <span>Stop</span>
+                        </>
+                      ) : (
+                        <>
+                          <Volume2 className="w-3 h-3" />
+                          <span>Listen</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+
+        {/* Real-Time Processing Indicator */}
+        {assistantState === 'processing' && (
+          <div className="flex items-start space-x-3 animate-in fade-in duration-200">
+            <div className="w-8 h-8 rounded-xl bg-emerald-950 text-emerald-300 border border-emerald-700/60 flex items-center justify-center shrink-0">
+              <Bot className="w-4 h-4 text-emerald-400 animate-spin" />
+            </div>
+            <div className="p-4 rounded-2xl rounded-tl-xs bg-[#0f281e] border border-emerald-800/60 text-emerald-200 text-xs sm:text-sm flex items-center space-x-3 shadow-md">
+              <div className="flex space-x-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+                <span className="w-2 h-2 rounded-full bg-teal-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+                <span className="w-2 h-2 rounded-full bg-emerald-300 animate-bounce" style={{ animationDelay: '300ms' }} />
+              </div>
+              <span className="font-semibold text-emerald-300">
+                AgriSense AI is analyzing context and formulating answer...
+              </span>
             </div>
           </div>
+        )}
 
-          <div className="flex items-center space-x-2">
-            {/* Language Selector Dropdown */}
-            <div className="relative">
-              <select
-                value={selectedLang}
-                onChange={(e) => setSelectedLang(e.target.value)}
-                className="appearance-none bg-emerald-800/80 hover:bg-emerald-700 text-white text-xs font-bold py-2 pl-3 pr-8 rounded-xl border border-emerald-600/60 transition-colors cursor-pointer focus:outline-hidden"
-                title="Select Voice Language"
-              >
-                {INDIAN_LANGUAGES.map((l) => (
-                  <option key={l.code} value={l.code} className="bg-slate-900 text-white">
-                    {l.nativeName} ({l.name})
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="w-3.5 h-3.5 text-emerald-200 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+        {/* Listening Speech Bubble */}
+        {assistantState === 'listening' && (
+          <div className="p-3.5 rounded-2xl bg-gradient-to-r from-red-950/80 to-slate-900 border border-red-500/50 text-white text-xs flex items-center justify-between shadow-lg animate-pulse">
+            <div className="flex items-center space-x-3">
+              <span className="relative flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500" />
+              </span>
+              <span className="font-extrabold text-red-200">
+                Listening in {getLanguageByCode(selectedLang)?.nativeName || selectedLang.toUpperCase()}... Speak now.
+              </span>
+              {interimTranscript && (
+                <span className="italic text-slate-300 truncate max-w-xs">"{interimTranscript}"</span>
+              )}
             </div>
+            <button
+              onClick={() => voiceAssistantService.stopListening()}
+              className="px-2.5 py-1 rounded-lg bg-red-700 hover:bg-red-800 text-white font-bold text-xs cursor-pointer"
+            >
+              Stop
+            </button>
+          </div>
+        )}
 
-            {isModal && onClose && (
+        {/* Error Alert with Quick Actions */}
+        {errorMessage && (
+          <div className="p-4 rounded-2xl bg-rose-950/80 border border-rose-500/60 text-white text-xs space-y-2 shadow-lg animate-in fade-in duration-200">
+            <div className="flex items-start space-x-2.5">
+              <AlertCircle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+              <div className="flex-1 space-y-1">
+                <p className="font-extrabold text-rose-200 text-sm">AI Connection Notice</p>
+                <p className="text-rose-100/90 leading-relaxed">{errorMessage}</p>
+              </div>
+            </div>
+            <div className="flex items-center justify-end space-x-2 pt-1">
               <button
-                onClick={onClose}
-                className="p-2 rounded-xl text-emerald-200 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
-                title="Close Voice Assistant"
+                onClick={() => setShowConfigModal(true)}
+                className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold cursor-pointer transition-colors"
+              >
+                Configure API Key
+              </button>
+              {lastFailedQuestion && (
+                <button
+                  onClick={() => handleSendMessage(lastFailedQuestion)}
+                  className="px-3 py-1.5 rounded-xl bg-rose-700 hover:bg-rose-800 text-white font-bold cursor-pointer transition-colors"
+                >
+                  Retry Question
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        <div ref={messagesEndRef} />
+      </div>
+
+      {/* 3. Quick Suggested Prompts Carousel */}
+      <div className="p-2.5 bg-slate-900/90 border-t border-emerald-950 flex items-center space-x-2 overflow-x-auto scrollbar-none shrink-0">
+        <span className="text-[10px] text-emerald-400 font-extrabold uppercase tracking-wider shrink-0 pl-2">
+          Suggestions:
+        </span>
+        {samplePrompts.map((p, idx) => (
+          <button
+            key={idx}
+            onClick={() => handleSendMessage(p)}
+            className="px-2.5 py-1 rounded-xl bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-800/60 text-emerald-200 text-[11px] font-semibold whitespace-nowrap transition-colors cursor-pointer shrink-0"
+          >
+            {p}
+          </button>
+        ))}
+      </div>
+
+      {/* 4. Chat Message Input Bar */}
+      <div className="p-3 sm:p-4 bg-slate-950 border-t border-emerald-800/40 shrink-0">
+        <div className="flex items-end space-x-2 bg-slate-900 rounded-2xl p-2 border border-emerald-700/60 focus-within:border-emerald-400 focus-within:ring-2 focus-within:ring-emerald-500/20 transition-all shadow-inner">
+          {/* Microphone Voice Toggle */}
+          <button
+            onClick={handleToggleVoice}
+            disabled={assistantState === 'processing'}
+            className={`p-2.5 rounded-xl transition-all cursor-pointer shrink-0 ${
+              assistantState === 'listening'
+                ? 'bg-red-600 text-white animate-pulse shadow-md shadow-red-600/40'
+                : 'bg-emerald-950 text-emerald-300 hover:bg-emerald-900 hover:text-white border border-emerald-700/60'
+            }`}
+            title="Speak using voice recognition (STT)"
+          >
+            {assistantState === 'listening' ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+          </button>
+
+          {/* Text Input Area */}
+          <textarea
+            ref={textareaRef}
+            rows={1}
+            value={textInput}
+            onChange={(e) => setTextInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={`Ask AgriSense AI anything in ${getLanguageByCode(selectedLang)?.nativeName || 'English'}... (Enter to send, Shift+Enter for new line)`}
+            className="flex-1 max-h-32 bg-transparent text-white placeholder-slate-500 text-xs sm:text-sm px-2 py-1.5 resize-none focus:outline-none scrollbar-thin"
+          />
+
+          {/* Send Button */}
+          <button
+            onClick={() => handleSendMessage()}
+            disabled={assistantState === 'processing' || !textInput.trim()}
+            className={`p-2.5 rounded-xl font-bold transition-all shrink-0 cursor-pointer ${
+              textInput.trim() && assistantState !== 'processing'
+                ? 'bg-gradient-to-r from-emerald-600 to-teal-500 text-white shadow-md shadow-emerald-700/30 hover:scale-105'
+                : 'bg-slate-800 text-slate-500 cursor-not-allowed'
+            }`}
+            title="Send Message"
+          >
+            <Send className="w-5 h-5" />
+          </button>
+        </div>
+      </div>
+
+      {/* 5. API Key Configuration Modal */}
+      {showConfigModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-emerald-500/40 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between border-b border-emerald-800/40 pb-3">
+              <div className="flex items-center space-x-2 text-white">
+                <Key className="w-5 h-5 text-emerald-400" />
+                <h3 className="font-black text-base">Configure AI LLM Provider</h3>
+              </div>
+              <button
+                onClick={() => setShowConfigModal(false)}
+                className="p-1 rounded-xl hover:bg-white/10 text-slate-400 hover:text-white"
               >
                 <X className="w-5 h-5" />
               </button>
-            )}
-          </div>
-        </div>
-
-        {/* Browser Capability Banner */}
-        <div className="px-4 sm:px-6 py-2 bg-emerald-50/70 border-b border-emerald-100 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-600">
-          <div className="flex items-center space-x-2">
-            <span className="font-semibold text-emerald-950">Active Language:</span>
-            <span className="px-2 py-0.5 rounded-md bg-emerald-200/80 text-emerald-900 font-bold">
-              {currentLangMeta.nativeName} ({currentLangMeta.name})
-            </span>
-          </div>
-
-          <div className="flex items-center space-x-3 text-[10px] font-medium">
-            <span className="flex items-center space-x-1">
-              <span className={`w-2 h-2 rounded-full ${langCapabilities.sttSupported ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-              <span>{langCapabilities.sttSupported ? 'Microphone Ready' : 'Mic Unsupported'}</span>
-            </span>
-            <span className="flex items-center space-x-1">
-              <span className={`w-2 h-2 rounded-full ${langCapabilities.ttsSupported ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-              <span>{langCapabilities.hasNativeVoice ? 'Native Voice' : 'System Voice'}</span>
-            </span>
-          </div>
-        </div>
-
-        {/* Main Voice Interaction Body */}
-        <div className="p-5 sm:p-8 space-y-6">
-          {/* Large Central Microphone Button Area */}
-          <div className="flex flex-col items-center justify-center py-4 space-y-4">
-            <div className="relative flex items-center justify-center">
-              {/* Pulsing ring animation when listening */}
-              {assistantState === 'listening' && (
-                <>
-                  <div className="absolute w-36 h-36 sm:w-44 sm:h-44 rounded-full bg-rose-500/20 animate-ping" />
-                  <div className="absolute w-32 h-32 sm:w-40 sm:h-40 rounded-full bg-rose-500/30 animate-pulse" />
-                </>
-              )}
-
-              {/* Pulsing ring animation when speaking */}
-              {isSpeakingActive && (
-                <>
-                  <div className="absolute w-36 h-36 sm:w-44 sm:h-44 rounded-full bg-emerald-500/20 animate-ping" />
-                  <div className="absolute w-32 h-32 sm:w-40 sm:h-40 rounded-full bg-emerald-500/30 animate-pulse" />
-                </>
-              )}
-
-              <button
-                onClick={handleStartListening}
-                className={`relative z-10 w-24 h-24 sm:w-28 sm:h-28 rounded-full flex flex-col items-center justify-center text-white shadow-2xl transition-all duration-300 transform active:scale-95 cursor-pointer ${
-                  assistantState === 'listening'
-                    ? 'bg-gradient-to-tr from-rose-600 to-red-500 shadow-rose-600/40 scale-105'
-                    : isSpeakingActive
-                    ? 'bg-gradient-to-tr from-emerald-600 to-teal-500 shadow-emerald-600/40'
-                    : 'bg-gradient-to-tr from-emerald-800 to-green-700 hover:from-emerald-700 hover:to-green-600 shadow-emerald-900/30 hover:scale-105'
-                }`}
-                title={assistantState === 'listening' ? 'Tap to Stop Listening' : 'Tap to Speak in your Language'}
-              >
-                {assistantState === 'listening' ? (
-                  <MicOff className="w-10 h-10 animate-bounce" />
-                ) : isSpeakingActive ? (
-                  <Volume2 className="w-10 h-10 animate-pulse" />
-                ) : (
-                  <Mic className="w-10 h-10" />
-                )}
-                <span className="text-[10px] font-bold uppercase tracking-wider mt-1">
-                  {assistantState === 'listening'
-                    ? 'Listening'
-                    : isSpeakingActive
-                    ? 'Speaking'
-                    : 'Tap to Speak'}
-                </span>
-              </button>
             </div>
 
-            {/* Current Status Pill */}
-            <div className="text-center space-y-1">
-              <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-slate-100 text-xs font-semibold text-slate-700 border border-slate-200">
-                {assistantState === 'listening' && (
-                  <>
-                    <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
-                    <span className="text-rose-700 font-bold">
-                      {t('voice.listeningPrompt', 'Listening... Please speak your question now in')} {currentLangMeta.nativeName}
-                    </span>
-                  </>
-                )}
-                {assistantState === 'processing' && (
-                  <>
-                    <div className="w-3 h-3 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" />
-                    <span className="text-emerald-800 font-bold">
-                      {t('voice.thinkingPrompt', 'Analyzing weather & farm data...')}
-                    </span>
-                  </>
-                )}
-                {assistantState === 'speaking' && (
-                  <>
-                    <Volume2 className="w-3.5 h-3.5 text-emerald-600 animate-pulse" />
-                    <span className="text-emerald-800 font-bold">
-                      {t('voice.speakingPrompt', 'Reading answer aloud...')}
-                    </span>
-                  </>
-                )}
-                {assistantState === 'idle' && (
-                  <span>{t('voice.idlePrompt', 'Tap microphone above, type your question, or select a prompt below')}</span>
-                )}
-                {assistantState === 'error' && (
-                  <span className="text-rose-700 font-bold">Error encountered. See details below.</span>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Honest Error Banner with Retry Question Button */}
-          {errorMessage && (
-            <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in duration-200 shadow-sm">
-              <div className="flex items-start space-x-2.5">
-                <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
-                <div className="space-y-0.5">
-                  <strong className="text-xs font-bold block text-rose-800 uppercase tracking-wider">
-                    AI Assistant Notice
-                  </strong>
-                  <p className="text-xs text-rose-700 leading-relaxed">
-                    {errorMessage}
-                  </p>
-                </div>
-              </div>
-              {lastFailedQuestion && (
-                <button
-                  onClick={() => processQuestion(lastFailedQuestion, true)}
-                  className="px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-colors cursor-pointer flex items-center justify-center space-x-1.5 shrink-0 shadow-sm"
-                  title="Retry asking this question"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  <span>Retry Question</span>
-                </button>
-              )}
-            </div>
-          )}
-
-          {/* Text Input Form for Direct Typing in Any Language */}
-          <div className="space-y-2">
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (textInput.trim() && assistantState !== 'processing') {
-                  processQuestion(textInput.trim());
-                  setTextInput('');
-                }
-              }}
-              className="flex items-center gap-2 max-w-3xl mx-auto w-full"
-            >
-              <div className="relative flex-1">
-                <input
-                  type="text"
-                  value={textInput}
-                  onChange={(e) => setTextInput(e.target.value)}
-                  placeholder={`Ask or type in ${currentLangMeta.nativeName} or English (e.g., "Why are tomato leaves turning yellow?")...`}
-                  disabled={assistantState === 'processing'}
-                  className="w-full px-4 py-3 pl-10 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white focus:outline-hidden text-sm text-slate-800 placeholder-slate-400 transition-colors shadow-inner"
-                />
-                <MessageSquare className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-              </div>
-              <button
-                type="submit"
-                disabled={!textInput.trim() || assistantState === 'processing'}
-                className="px-5 py-3 rounded-2xl bg-emerald-700 hover:bg-emerald-800 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-bold flex items-center space-x-1.5 transition-all shadow-md shadow-emerald-900/20 cursor-pointer shrink-0"
-              >
-                <span>Send</span>
-                <Send className="w-4 h-4" />
-              </button>
-            </form>
-
-            {conversationHistory.length > 0 && (
-              <div className="flex items-center justify-between text-[11px] text-slate-500 px-2">
-                <span>
-                  Active Conversation: {Math.floor(conversationHistory.length / 2)} turn{conversationHistory.length > 2 ? 's' : ''} (context preserved for follow-ups)
-                </span>
-                <button
-                  onClick={handleResetConversation}
-                  className="text-slate-400 hover:text-rose-600 transition-colors flex items-center space-x-1 cursor-pointer"
-                  title="Clear conversation history and start fresh"
-                >
-                  <Trash2 className="w-3 h-3" />
-                  <span>Clear Conversation</span>
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Real-time speech transcript feedback */}
-          {(interimTranscript || recognizedQuestion) && (
-            <div className="p-4 rounded-2xl bg-emerald-50/70 border border-emerald-200 space-y-1.5 animate-in fade-in duration-150">
-              <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider block">
-                {t('voice.youAsked', 'Your Question')}
-              </span>
-              <p className="text-base sm:text-lg font-bold text-slate-900 leading-snug">
-                &ldquo;{interimTranscript || recognizedQuestion}&rdquo;
+            <div className="space-y-3 text-xs text-slate-300">
+              <p>
+                AgriSense connects directly to genuine Large Language Models via backend REST APIs.
+                Select your preferred provider:
               </p>
-            </div>
-          )}
 
-          {/* Answer Card with Spoken Details */}
-          {answerData && (
-            <div className="rounded-3xl bg-slate-900 text-white p-5 sm:p-7 space-y-5 shadow-xl border border-emerald-900/40 animate-in zoom-in-95 duration-200">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
-                <div className="flex items-center space-x-2.5">
-                  <div className="w-7 h-7 rounded-xl bg-emerald-600 flex items-center justify-center text-white shrink-0">
-                    <Sparkles className="w-4 h-4 text-emerald-200" />
-                  </div>
-                  <div>
-                    <h3 className="text-base sm:text-lg font-bold text-white">
-                      {answerData.title}
-                    </h3>
-                    {answerData.provider && (
-                      <span className="text-[10px] font-semibold text-emerald-400 uppercase tracking-wider block">
-                        Engine: {answerData.provider} • {answerData.model || 'agri-reasoning'}
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Audio Playback Controls */}
-                <div className="flex items-center space-x-2">
-                  {/* Speed Toggle (Normal 0.95 vs Slower 0.80) */}
+              {/* Provider Selection */}
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { id: 'gemini', label: 'Google Gemini', desc: 'gemini-1.5-flash' },
+                  { id: 'groq', label: 'Groq Cloud', desc: 'llama-3.3-70b' },
+                  { id: 'openai', label: 'OpenAI', desc: 'gpt-4o-mini' }
+                ].map((p) => (
                   <button
-                    onClick={handleToggleSpeed}
-                    className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold flex items-center space-x-1 border border-slate-700 cursor-pointer"
-                    title="Toggle speech speed for clearer understanding"
+                    key={p.id}
+                    type="button"
+                    onClick={() => setProviderChoice(p.id)}
+                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                      providerChoice === p.id
+                        ? 'bg-emerald-900/60 border-emerald-400 text-white shadow-xs'
+                        : 'bg-slate-800/60 border-slate-700 text-slate-400 hover:bg-slate-800'
+                    }`}
                   >
-                    <span>Speed: {speechSpeed < 0.9 ? '0.8x (Slower)' : '1.0x (Normal)'}</span>
+                    <div className="font-extrabold text-xs text-white">{p.label}</div>
+                    <div className="text-[10px] text-emerald-300 font-mono mt-0.5">{p.desc}</div>
                   </button>
-
-                  {/* Repeat Audio */}
-                  <button
-                    onClick={handleRepeatAudio}
-                    className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-emerald-400 hover:text-emerald-300 transition-colors cursor-pointer border border-slate-700"
-                    title="Listen to answer again"
-                  >
-                    <RotateCcw className="w-4 h-4" />
-                  </button>
-
-                  {/* Stop Audio */}
-                  {isSpeakingActive && (
-                    <button
-                      onClick={handleStopSpeaking}
-                      className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-colors cursor-pointer flex items-center space-x-1"
-                      title="Stop speaking"
-                    >
-                      <VolumeX className="w-3.5 h-3.5" />
-                      <span>Stop</span>
-                    </button>
-                  )}
-
-                  {/* Ask Another */}
-                  <button
-                    onClick={handleAskAnother}
-                    className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-colors cursor-pointer flex items-center space-x-1"
-                  >
-                    <Mic className="w-3.5 h-3.5" />
-                    <span>Ask Another</span>
-                  </button>
-                </div>
+                ))}
               </div>
 
-              {/* Answer Text in High-Contrast Large Font */}
-              <div className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800">
-                <p className="text-sm sm:text-base text-emerald-100 leading-relaxed font-medium">
-                  {answerData.speechText}
+              {/* API Key Input */}
+              <div className="space-y-1 pt-1">
+                <label className="block text-slate-300 font-bold text-xs">
+                  {providerChoice.toUpperCase()} API Key:
+                </label>
+                <input
+                  type="password"
+                  value={apiKeyInput}
+                  onChange={(e) => setApiKeyInput(e.target.value)}
+                  placeholder={`Enter your ${providerChoice} API key...`}
+                  className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-emerald-700/50 text-white text-xs font-mono focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                />
+                <p className="text-[10px] text-slate-400 pt-0.5">
+                  Stored securely in your local session or configure <code className="text-emerald-300">backend/.env</code> for server-side persistence.
                 </p>
               </div>
 
-              {/* Connected Real Data Cards */}
-              {answerData.displayCards && (
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                  {answerData.displayCards.map((card, idx) => (
-                    <div key={idx} className="p-3 rounded-2xl bg-slate-800/80 border border-slate-700 space-y-1">
-                      <span className="text-[10px] text-slate-400 uppercase font-semibold block">
-                        {card.label}
-                      </span>
-                      <strong className="text-sm sm:text-base text-white block font-bold">
-                        {card.value}
-                      </strong>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Quick-Prompt Question Pills */}
-          <div className="space-y-3 pt-2">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center space-x-1.5">
-                <HelpCircle className="w-4 h-4 text-emerald-600" />
-                <span>{t('voice.suggestedQuestions', 'Or Tap a Common Question in')} {currentLangMeta.nativeName}:</span>
-              </span>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-              {getQuickQuestions().map((q, idx) => {
-                const Icon = q.icon;
-                return (
-                  <button
-                    key={idx}
-                    onClick={() => {
-                      setRecognizedQuestion(q.text);
-                      processQuestion(q.text);
-                    }}
-                    className="text-left p-3 rounded-2xl bg-slate-50 hover:bg-emerald-50/70 border border-slate-200/90 hover:border-emerald-300 transition-all flex items-center space-x-2.5 group cursor-pointer"
-                  >
-                    <div className="w-8 h-8 rounded-xl bg-white text-emerald-700 flex items-center justify-center shrink-0 border border-slate-200 group-hover:scale-105 transition-transform">
-                      <Icon className="w-4 h-4" />
-                    </div>
-                    <span className="text-xs font-semibold text-slate-800 group-hover:text-emerald-950 leading-snug">
-                      {q.text}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Real Agricultural Telemetry Overview Snapshot */}
-          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-xs space-y-2">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center space-x-1">
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Connected Real-World Telemetry Sources</span>
-            </span>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-slate-700 text-[11px]">
-              <div>
-                <span className="text-slate-400 block">Open-Meteo Weather:</span>
-                <strong>{currentWeather?.temperature_2m ?? 26}°C • {currentWeather?.weather_code !== undefined ? 'WMO Connected' : 'Active'}</strong>
-              </div>
-              <div>
-                <span className="text-slate-400 block">4 Irrigation Zones:</span>
-                <strong className="text-amber-700">Zone 2 at 28% (Dry)</strong>
-              </div>
-              <div>
-                <span className="text-slate-400 block">Farm Water Tank:</span>
-                <strong className="text-emerald-700">{telemetry.waterTank.fillPercentage}% (11,700 L)</strong>
-              </div>
-              <div>
-                <span className="text-slate-400 block">Soil pH & Quality:</span>
-                <strong>pH {telemetry.soilAnalysis.farmAveragePh} (Optimal)</strong>
+              {/* Quick Key Links */}
+              <div className="p-3 rounded-xl bg-emerald-950/60 border border-emerald-800/50 space-y-1.5 text-[11px]">
+                <p className="font-bold text-emerald-300">Need a free API Key?</p>
+                <ul className="space-y-1 list-disc list-inside text-slate-300">
+                  <li>
+                    <a href="https://aistudio.google.com/" target="_blank" rel="noreferrer" className="text-emerald-400 underline hover:text-emerald-300">
+                      Google AI Studio (Gemini Free Tier)
+                    </a>
+                  </li>
+                  <li>
+                    <a href="https://console.groq.com/keys" target="_blank" rel="noreferrer" className="text-emerald-400 underline hover:text-emerald-300">
+                      Groq Cloud (Llama 3.3 70B Fast Free Tier)
+                    </a>
+                  </li>
+                  <li>
+                    <a href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer" className="text-emerald-400 underline hover:text-emerald-300">
+                      OpenAI Developer Platform
+                    </a>
+                  </li>
+                </ul>
               </div>
             </div>
-          </div>
 
-          {/* Safety & Agronomic Guidance Disclaimer */}
-          <div className="p-3.5 rounded-2xl bg-amber-50/80 border border-amber-200 text-[11px] text-amber-900 flex items-start space-x-2.5">
-            <ShieldAlert className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
-            <div className="space-y-0.5 leading-relaxed">
-              <strong className="font-bold">Agronomic Safety Notice:</strong>
-              <p>
-                AgriSense answers are synthesized directly from real physical weather readings, numerical forecast models, and root-zone sensor telemetry. Before applying chemical treatments, always consult your local Krishi Vigyan Kendra (KVK) or certified agricultural extension officer. Motor pumps and solenoid valves require manual confirmation on the control panel to operate.
-              </p>
+            <div className="flex items-center justify-end space-x-2 pt-2 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setShowConfigModal(false)}
+                className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveConfig}
+                className="px-4 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold shadow-md cursor-pointer"
+              >
+                Save &amp; Connect
+              </button>
             </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

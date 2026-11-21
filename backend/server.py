@@ -1085,7 +1085,10 @@ async def websocket_telemetry_endpoint(websocket: WebSocket):
         hardware_manager.unregister_websocket(websocket)
 
 
-from backend.assistant_service import get_assistant_status, process_assistant_chat
+try:
+    from backend.assistant_service import get_assistant_status, process_assistant_chat
+except ImportError:
+    from assistant_service import get_assistant_status, process_assistant_chat
 
 
 class AssistantChatModel(BaseModel):
