@@ -27,7 +27,8 @@ import {
   YAxis,
   Tooltip,
   Legend,
-  CartesianGrid
+  CartesianGrid,
+  ReferenceLine
 } from 'recharts';
 import WeatherIcon from './WeatherIcon';
 import {
