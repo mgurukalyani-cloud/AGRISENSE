@@ -12,22 +12,37 @@ import {
   Filter,
   CheckCircle2,
   Award,
-  ArrowRight
+  ArrowRight,
+  ShoppingCart,
+  Package,
+  Check
 } from 'lucide-react';
 import { CROPS_DATABASE } from '../../services/cropPlanningService';
 import { getMandiPriceForCrop } from '../../services/mandiPriceService';
 import { calculateProfitabilityScenarios } from '../../services/cultivationCostService';
+import { getPredictedFertilizersForCrop, fertilizerStoreService } from '../../services/fertilizerStoreService';
 
 export default function CropComparisonView({
   recommendations = [],
   landAreaAcres = 2.0,
   onSelectCropForCosting,
+  onOpenCart,
   farmerState = 'Punjab'
 }) {
   const { t } = useTranslation();
 
   const [sortBy, setSortBy] = useState('netReturn'); // 'netReturn' | 'suitability' | 'water' | 'cost' | 'duration'
   const [filterWater, setFilterWater] = useState('all'); // 'all' | 'Low' | 'Medium' | 'High'
+  const [addedCropIds, setAddedCropIds] = useState({});
+
+  const handleAddCropFertilizers = (crop) => {
+    const ferts = getPredictedFertilizersForCrop(crop, landAreaAcres);
+    fertilizerStoreService.addAllToCart(ferts, crop);
+    setAddedCropIds((prev) => ({ ...prev, [crop.id]: true }));
+    setTimeout(() => {
+      setAddedCropIds((prev) => ({ ...prev, [crop.id]: false }));
+    }, 2000);
+  };
 
   // Pre-calculate comparative metrics for top crops
   const comparedCrops = recommendations.map(rec => {
@@ -255,6 +270,22 @@ export default function CropComparisonView({
                     {item.riskLevel.replace('_', ' ')}
                   </span>
                 </div>
+
+                {/* Fertilizers Prediction Row in Comparator */}
+                <div className="pt-2 border-t border-slate-100 space-y-1">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center space-x-1">
+                      <Package className="w-3 h-3 text-emerald-700" />
+                      <span>Predicted Fertilizers:</span>
+                    </span>
+                    <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200">
+                      DBT Subsidized
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-700 font-medium">
+                    Urea: {item.crop.fertilizerDosage?.urea?.split('(')[0] || '90 kg'} • DAP: {item.crop.fertilizerDosage?.dap?.split('(')[0] || '50 kg'}
+                  </p>
+                </div>
               </div>
 
               {/* Justification snippet */}
@@ -263,14 +294,29 @@ export default function CropComparisonView({
               </p>
             </div>
 
-            {/* Select & Costing Action */}
-            <button
-              onClick={() => onSelectCropForCosting(item.crop.id)}
-              className="w-full flex items-center justify-center space-x-1.5 px-4 py-2.5 rounded-2xl bg-emerald-800 hover:bg-emerald-900 text-white font-bold text-xs transition-all shadow-xs cursor-pointer mt-3"
-            >
-              <span>Explore Cost & Profit Matrix</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
+            {/* Actions: Add to Cart & Explore Costing */}
+            <div className="space-y-1.5 pt-2">
+              <button
+                type="button"
+                onClick={() => handleAddCropFertilizers(item.crop)}
+                className={`w-full flex items-center justify-center space-x-1.5 px-3 py-2 rounded-2xl text-xs font-bold transition-all cursor-pointer shadow-2xs ${
+                  addedCropIds[item.crop.id]
+                    ? 'bg-emerald-500 text-slate-950 font-black'
+                    : 'bg-emerald-50 text-emerald-900 border border-emerald-300 hover:bg-emerald-100'
+                }`}
+              >
+                {addedCropIds[item.crop.id] ? <Check className="w-3.5 h-3.5" /> : <ShoppingCart className="w-3.5 h-3.5 text-emerald-700" />}
+                <span>{addedCropIds[item.crop.id] ? 'Fertilizers Added to Cart!' : `Add Fertilizers to Cart (${landAreaAcres} ac)`}</span>
+              </button>
+
+              <button
+                onClick={() => onSelectCropForCosting(item.crop.id)}
+                className="w-full flex items-center justify-center space-x-1.5 px-4 py-2 rounded-2xl bg-slate-900 hover:bg-emerald-900 text-white font-bold text-xs transition-all shadow-xs cursor-pointer"
+              >
+                <span>Explore Cost & Profit Matrix</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
         ))}
       </div>

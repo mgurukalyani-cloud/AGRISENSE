@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Sprout,
@@ -18,15 +18,18 @@ import {
   ShieldCheck,
   CheckCircle2,
   XCircle,
-  Filter
+  Filter,
+  ShoppingCart
 } from 'lucide-react';
 
 import { recommendCrops, SEASONS, SOIL_TYPES, IRRIGATION_TYPES } from '../../services/cropPlanningService';
+import { fertilizerStoreService } from '../../services/fertilizerStoreService';
 import FarmerFieldProfileModal from './FarmerFieldProfileModal';
 import CropRecommendationCard from './CropRecommendationCard';
 import CultivationCostCalculator from './CultivationCostCalculator';
 import MandiPriceView from './MandiPriceView';
 import CropComparisonView from './CropComparisonView';
+import FertilizerCartDrawer from './FertilizerCartDrawer';
 
 export default function CropPlanningPage({
   currentWeather,
@@ -47,6 +50,17 @@ export default function CropPlanningPage({
 
   // Modal State
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isCartOpen, setIsCartOpen] = useState(false);
+
+  // Cart Totals State
+  const [cartTotals, setCartTotals] = useState(() => fertilizerStoreService.getCartTotals());
+
+  useEffect(() => {
+    const updateTotals = () => setCartTotals(fertilizerStoreService.getCartTotals());
+    updateTotals();
+    const unsubscribe = fertilizerStoreService.subscribe(updateTotals);
+    return () => unsubscribe();
+  }, []);
 
   // Farmer Field Profile State
   const [profile, setProfile] = useState(() => {
@@ -167,14 +181,35 @@ export default function CropPlanningPage({
             </p>
           </div>
 
-          {/* Quick Edit Profile Action */}
-          <button
-            onClick={() => setIsProfileModalOpen(true)}
-            className="flex items-center space-x-2.5 px-5 py-3.5 rounded-2xl bg-white text-emerald-950 font-black text-xs sm:text-sm hover:bg-emerald-50 shadow-lg shadow-emerald-950/30 transition-all shrink-0 cursor-pointer"
-          >
-            <Settings className="w-4 h-4 text-emerald-800" />
-            <span>{t('cropPlanning.customizeFieldProfile', 'Edit Field & Soil Profile')}</span>
-          </button>
+          {/* Actions: Edit Profile & Fertilizer Cart */}
+          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+            {/* Live Fertilizer Cart Button */}
+            <button
+              onClick={() => setIsCartOpen(true)}
+              className={`flex items-center space-x-2 px-4 py-3.5 rounded-2xl font-black text-xs sm:text-sm transition-all shrink-0 cursor-pointer shadow-lg ${
+                cartTotals.totalBags > 0
+                  ? 'bg-emerald-400 hover:bg-emerald-300 text-slate-950 shadow-emerald-950/40 ring-2 ring-emerald-300'
+                  : 'bg-emerald-800/80 hover:bg-emerald-750 text-white border border-emerald-600/50'
+              }`}
+            >
+              <ShoppingCart className="w-4 h-4" />
+              <span>Fertilizer Cart</span>
+              {cartTotals.totalBags > 0 && (
+                <span className="px-2 py-0.5 rounded-full bg-slate-950 text-emerald-400 text-[11px] font-mono font-black">
+                  {cartTotals.totalBags} bags • ₹{cartTotals.grandTotal.toLocaleString()}
+                </span>
+              )}
+            </button>
+
+            {/* Quick Edit Profile Action */}
+            <button
+              onClick={() => setIsProfileModalOpen(true)}
+              className="flex items-center space-x-2.5 px-4 sm:px-5 py-3.5 rounded-2xl bg-white text-emerald-950 font-black text-xs sm:text-sm hover:bg-emerald-50 shadow-lg shadow-emerald-950/30 transition-all shrink-0 cursor-pointer"
+            >
+              <Settings className="w-4 h-4 text-emerald-800" />
+              <span>{t('cropPlanning.customizeFieldProfile', 'Edit Field & Soil Profile')}</span>
+            </button>
+          </div>
         </div>
 
         {/* Ambient background decoration */}
@@ -378,8 +413,10 @@ export default function CropPlanningPage({
                 <CropRecommendationCard
                   key={rec.crop.id}
                   rec={rec}
+                  landAreaAcres={profile.landAreaAcres || 2.0}
                   onSelectForCosting={handleSelectForCosting}
                   onSelectForMandi={handleSelectForMandi}
+                  onOpenCart={() => setIsCartOpen(true)}
                   farmerState={profile.state}
                 />
               ))}
@@ -411,8 +448,9 @@ export default function CropPlanningPage({
         {activeSubTab === 'comparator' && (
           <CropComparisonView
             recommendations={recommendations}
-            landAreaAcres={profile.landAreaAcres}
+            landAreaAcres={profile.landAreaAcres || 2.0}
             onSelectCropForCosting={handleSelectForCosting}
+            onOpenCart={() => setIsCartOpen(true)}
             farmerState={profile.state}
           />
         )}
@@ -425,6 +463,13 @@ export default function CropPlanningPage({
         profile={profile}
         onSaveProfile={handleSaveProfile}
         location={location}
+      />
+
+      {/* 7. DRAWER: KISAN FERTILIZER CART & DBT CHECKOUT */}
+      <FertilizerCartDrawer
+        isOpen={isCartOpen}
+        onClose={() => setIsCartOpen(false)}
+        farmerProfile={profile}
       />
 
     </div>

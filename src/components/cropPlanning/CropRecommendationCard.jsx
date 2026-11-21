@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Sprout,
@@ -18,19 +18,30 @@ import {
   AlertCircle,
   CheckCircle2,
   XCircle,
-  Info
+  Info,
+  ShoppingCart,
+  Package,
+  Check,
+  Zap
 } from 'lucide-react';
 import { getMandiPriceForCrop } from '../../services/mandiPriceService';
+import { getPredictedFertilizersForCrop, fertilizerStoreService } from '../../services/fertilizerStoreService';
 
 export default function CropRecommendationCard({
   rec,
   onSelectForCosting,
   onSelectForMandi,
+  landAreaAcres = 2.0,
+  onOpenCart,
   farmerState = 'Punjab'
 }) {
   const { t } = useTranslation();
   const [isExpanded, setIsExpanded] = useState(false);
   const [activeTab, setActiveTab] = useState('varieties'); // 'varieties' | 'inputs' | 'irrigation' | 'pests'
+
+  // Cart addition feedback states
+  const [addedItemIds, setAddedItemIds] = useState({});
+  const [allAddedToast, setAllAddedToast] = useState(false);
 
   const {
     crop = {},
@@ -49,6 +60,42 @@ export default function CropRecommendationCard({
   const [imgLoaded, setImgLoaded] = useState(false);
 
   const mandiPrice = getMandiPriceForCrop(crop.id, farmerState);
+
+  // Compute predicted fertilizers for this crop & acreage
+  const predictedFertilizers = useMemo(() => {
+    return getPredictedFertilizersForCrop(crop, landAreaAcres);
+  }, [crop, landAreaAcres]);
+
+  const totalFertilizerBags = useMemo(() => {
+    return predictedFertilizers.reduce((sum, f) => sum + f.recommendedBags, 0);
+  }, [predictedFertilizers]);
+
+  const totalFertilizerCost = useMemo(() => {
+    return predictedFertilizers.reduce((sum, f) => sum + f.lineTotal, 0);
+  }, [predictedFertilizers]);
+
+  const totalSubsidySaved = useMemo(() => {
+    return predictedFertilizers.reduce((sum, f) => sum + f.lineSubsidySaved, 0);
+  }, [predictedFertilizers]);
+
+  const handleAddToCart = (fert) => {
+    fertilizerStoreService.addToCart(fert, fert.recommendedBags, crop);
+    setAddedItemIds((prev) => ({ ...prev, [fert.catalogKey]: true }));
+    setTimeout(() => {
+      setAddedItemIds((prev) => ({ ...prev, [fert.catalogKey]: false }));
+    }, 2000);
+  };
+
+  const handleBuyNow = (fert) => {
+    fertilizerStoreService.addToCart(fert, fert.recommendedBags, crop);
+    if (onOpenCart) onOpenCart();
+  };
+
+  const handleAddAllToCart = () => {
+    fertilizerStoreService.addAllToCart(predictedFertilizers, crop);
+    setAllAddedToast(true);
+    setTimeout(() => setAllAddedToast(false), 2200);
+  };
 
   const getTierBadge = () => {
     if (!isSuitable) {
@@ -289,6 +336,126 @@ export default function CropRecommendationCard({
         </div>
 
       </div>
+
+      {/* DEDICATED FERTILIZERS PREDICTION & INSTANT PURCHASE ROW */}
+      {predictedFertilizers.length > 0 && (
+        <div className="p-4 sm:p-5 bg-gradient-to-r from-emerald-950 via-[#072418] to-slate-950 border-b border-emerald-900/60 text-white space-y-3.5">
+          {/* Section Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+            <div className="flex items-center space-x-2.5">
+              <div className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center shrink-0">
+                <Package className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="flex items-center space-x-2">
+                  <h4 className="text-xs sm:text-sm font-black text-white uppercase tracking-wider">
+                    Fertilizers Prediction ({landAreaAcres} Acres)
+                  </h4>
+                  <span className="px-2 py-0.2 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                    DBT Subsidized
+                  </span>
+                </div>
+                <p className="text-[11px] text-emerald-300/80">
+                  Total Predicted: <strong className="text-white">{totalFertilizerBags} Bags</strong> • Cost: <strong className="text-white font-mono">₹{totalFertilizerCost.toLocaleString()}</strong> (Save ₹{totalSubsidySaved.toLocaleString()} Govt Subsidy)
+                </p>
+              </div>
+            </div>
+
+            {/* Quick Action: Add all fertilizers to cart */}
+            <button
+              onClick={handleAddAllToCart}
+              className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all flex items-center space-x-1.5 cursor-pointer shrink-0 self-start sm:self-center shadow-md ${
+                allAddedToast
+                  ? 'bg-emerald-400 text-slate-950 ring-2 ring-emerald-300'
+                  : 'bg-emerald-600 hover:bg-emerald-500 text-white'
+              }`}
+            >
+              {allAddedToast ? <Check className="w-3.5 h-3.5" /> : <ShoppingCart className="w-3.5 h-3.5" />}
+              <span>{allAddedToast ? 'All Added to Cart!' : 'Add All Fertilizers to Cart'}</span>
+            </button>
+          </div>
+
+          {/* Grid of Predicted Fertilizer Products */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            {predictedFertilizers.map((fert) => {
+              const isItemAdded = addedItemIds[fert.catalogKey];
+
+              return (
+                <div
+                  key={fert.catalogKey}
+                  className="p-3 rounded-2xl bg-slate-900/90 border border-slate-800 hover:border-emerald-500/40 transition-all flex flex-col justify-between space-y-2.5 shadow-sm"
+                >
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400">
+                        {fert.name.split('(')[0]}
+                      </span>
+                      <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-slate-800 text-slate-300">
+                        {fert.bagWeightKg}kg bag
+                      </span>
+                    </div>
+
+                    <div className="flex items-baseline space-x-1.5">
+                      <span className="text-xl font-black text-white font-mono">
+                        {fert.recommendedBags}
+                      </span>
+                      <span className="text-xs font-bold text-slate-300">
+                        {fert.recommendedBags === 1 ? 'Bag' : 'Bags'}
+                      </span>
+                      <span className="text-[10px] text-slate-400">
+                        ({fert.totalKgNeeded} kg)
+                      </span>
+                    </div>
+
+                    <p className="text-[10px] text-slate-400 line-clamp-1" title={fert.dosageSchedule}>
+                      {fert.dosageSchedule}
+                    </p>
+
+                    <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-800/80">
+                      <div>
+                        <span className="font-mono font-bold text-white">
+                          ₹{fert.lineTotal.toLocaleString()}
+                        </span>
+                        <span className="text-[10px] text-slate-400 block">
+                          (₹{fert.mrp}/bag)
+                        </span>
+                      </div>
+                      <span className="text-[9px] font-medium text-emerald-400 bg-emerald-950/80 px-1.5 py-0.5 rounded border border-emerald-500/30">
+                        Save ₹{fert.lineSubsidySaved.toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Buy Now & Add to Cart Action Buttons */}
+                  <div className="grid grid-cols-2 gap-1.5 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => handleAddToCart(fert)}
+                      className={`py-1.5 px-2 rounded-xl text-[11px] font-bold transition-all flex items-center justify-center space-x-1 cursor-pointer ${
+                        isItemAdded
+                          ? 'bg-emerald-500 text-slate-950'
+                          : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
+                      }`}
+                    >
+                      {isItemAdded ? <Check className="w-3 h-3" /> : <ShoppingCart className="w-3 h-3 text-emerald-400" />}
+                      <span>{isItemAdded ? 'Added' : 'Add to Cart'}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleBuyNow(fert)}
+                      className="py-1.5 px-2 rounded-xl text-[11px] font-black bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 transition-all flex items-center justify-center space-x-1 cursor-pointer shadow-xs"
+                    >
+                      <Zap className="w-3 h-3 fill-current" />
+                      <span>Buy Now</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* 4. EXPANDABLE AGRONOMIC ACCORDION DETAILS */}
       {isExpanded && (
