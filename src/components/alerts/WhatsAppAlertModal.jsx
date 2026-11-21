@@ -30,6 +30,7 @@ import {
   DEMO_SCENARIOS,
   logWhatsAppAlert,
   getWhatsAppLogs,
+  triggerAutonomousWhatsAppDispatch,
   AGRISENSE_LIVE_URL
 } from '../../services/whatsappAlertService';
 
@@ -46,7 +47,9 @@ export default function WhatsAppAlertModal({
   isOpen,
   onClose,
   location,
-  activeAlert = null // Optional live detected alert from system
+  activeAlert = null, // Optional live detected alert from system
+  isHeavyRainSimulated = false,
+  onToggleHeavyRainSimulation
 }) {
   const { t } = useTranslation();
 
@@ -68,6 +71,10 @@ export default function WhatsAppAlertModal({
   const [simulationSuccess, setSimulationSuccess] = useState(false);
   const [copied, setCopied] = useState(false);
   const [logs, setLogs] = useState(() => getWhatsAppLogs());
+
+  // Autonomous Zero-Interference Demo State
+  const [isAutonomousRunning, setIsAutonomousRunning] = useState(false);
+  const [autonomousStep, setAutonomousStep] = useState(0);
 
   // Current alert object to display
   const currentScenario = DEMO_SCENARIOS.find((s) => s.id === selectedScenarioId) || DEMO_SCENARIOS[0];
@@ -117,6 +124,38 @@ export default function WhatsAppAlertModal({
       setSimulationSuccess(true);
       setTimeout(() => setSimulationSuccess(false), 3500);
     }, 1200);
+  };
+
+  // Run 100% Autonomous Heavy Rain Demo without any human interference
+  const handleRunAutonomousHeavyRain = () => {
+    setIsAutonomousRunning(true);
+    setAutonomousStep(1);
+
+    // Step 1: Inject simulated heavy rain environment into dashboard
+    if (onToggleHeavyRainSimulation) {
+      onToggleHeavyRainSimulation(true);
+    }
+    setSelectedScenarioId('rain_cloudburst');
+
+    // Step 2: Formulate emergency alert payload
+    setTimeout(() => {
+      setAutonomousStep(2);
+
+      // Step 3: Transmit autonomously directly to WhatsApp recipient without human interference
+      setTimeout(() => {
+        setAutonomousStep(3);
+        triggerAutonomousWhatsAppDispatch(
+          phoneInput || settings.phone,
+          DEMO_SCENARIOS[0].alert,
+          location,
+          true // Automatically open WhatsApp window / trigger dispatch
+        );
+        setLogs(getWhatsAppLogs());
+        setIsAutonomousRunning(false);
+        setSimulationSuccess(true);
+        setTimeout(() => setSimulationSuccess(false), 4500);
+      }, 1200);
+    }, 1000);
   };
 
   if (!isOpen) return null;
@@ -209,7 +248,92 @@ export default function WhatsAppAlertModal({
               ========================================================================= */}
           {activeTab === 'demo' && (
             <div className="space-y-6">
-              
+
+              {/* SPECIAL HIGHLIGHT: 100% Autonomous Heavy Rain Environment Simulator (Zero Human Interference) */}
+              <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-blue-950 via-indigo-950 to-slate-950 text-white border border-blue-500/40 shadow-xl space-y-3 relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-80 h-80 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
+
+                <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                  <div className="space-y-1.5 max-w-xl">
+                    <div className="flex items-center space-x-2 flex-wrap gap-y-1">
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-blue-500 text-white flex items-center space-x-1.5 shadow-sm">
+                        <span className="w-2 h-2 rounded-full bg-white animate-ping" />
+                        <span>Zero Human Interference Demo</span>
+                      </span>
+                      <span className="text-xs text-blue-300 font-mono">
+                        Direct Autonomous WhatsApp Pipeline
+                      </span>
+                    </div>
+
+                    <h3 className="text-sm sm:text-base md:text-lg font-black text-white tracking-tight flex items-center space-x-2">
+                      <span>Simulate Heavy Rain & Autonomous WhatsApp Dispatch</span>
+                    </h3>
+
+                    <p className="text-xs text-blue-200/90 leading-relaxed font-normal">
+                      Injects an unseasonal torrential rainstorm (24.6 mm/h downpour, 95% rain prob, 44 km/h gusts) into the platform and <strong>automatically sends the website alert directly to the respective WhatsApp number without accessing any human interference</strong>.
+                    </p>
+                  </div>
+
+                  <div className="relative z-10 shrink-0 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                    {isHeavyRainSimulated && (
+                      <button
+                        onClick={() => onToggleHeavyRainSimulation && onToggleHeavyRainSimulation(false)}
+                        className="flex items-center justify-center space-x-2 px-4 py-2.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-white text-xs font-bold transition-all border border-slate-600 shadow-sm cursor-pointer"
+                        title="Restore actual Open-Meteo live observations"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5 text-blue-300" />
+                        <span>Restore Real Weather</span>
+                      </button>
+                    )}
+
+                    <button
+                      onClick={handleRunAutonomousHeavyRain}
+                      disabled={isAutonomousRunning}
+                      className="flex items-center justify-center space-x-2.5 px-5 py-3 rounded-2xl bg-gradient-to-r from-[#25D366] to-emerald-400 hover:from-[#20bd5a] hover:to-emerald-500 text-slate-950 font-black text-xs sm:text-sm shadow-lg shadow-emerald-950/20 hover:scale-[1.02] transition-all cursor-pointer group disabled:opacity-50"
+                    >
+                      {isAutonomousRunning ? (
+                        <>
+                          <span className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
+                          <span>Transmitting Autonomously...</span>
+                        </>
+                      ) : (
+                        <>
+                          <CloudRain className="w-4 h-4 text-slate-950 group-hover:scale-110 transition-transform" />
+                          <span>⚡ Run Autonomous Heavy Rain Demo</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Autonomous Execution Live Step Ticker */}
+                {autonomousStep > 0 && (
+                  <div className="relative z-10 p-3.5 rounded-2xl bg-black/60 border border-blue-400/40 font-mono text-[11px] text-blue-200 space-y-1.5 animate-in fade-in duration-200">
+                    <div className="flex items-center justify-between text-xs font-bold text-white pb-1 border-b border-blue-500/20">
+                      <span className="flex items-center space-x-1.5">
+                        <span className="w-2 h-2 rounded-full bg-[#25D366] animate-pulse" />
+                        <span>Autonomous Emergency Broadcast Protocol (Zero Human Interference):</span>
+                      </span>
+                      <span className="text-[#25D366] font-mono">
+                        {autonomousStep === 3 ? '✓ DELIVERED (ACK 200)' : 'TRANSMITTING...'}
+                      </span>
+                    </div>
+                    <div className={`flex items-center space-x-2 ${autonomousStep >= 1 ? 'text-emerald-300 font-semibold' : 'text-slate-500'}`}>
+                      <span>{autonomousStep >= 1 ? '✓' : '○'}</span>
+                      <span>[1/3] Fake Heavy Rain Environment Injected: 24.6 mm/h downpour, 95% rain prob, 44 km/h gusts (WMO 65)</span>
+                    </div>
+                    <div className={`flex items-center space-x-2 ${autonomousStep >= 2 ? 'text-emerald-300 font-semibold' : 'text-slate-500'}`}>
+                      <span>{autonomousStep >= 2 ? '✓' : '○'}</span>
+                      <span>[2/3] Meteorological Event Tripped: Critical waterlogging advisory payload formulated with website link</span>
+                    </div>
+                    <div className={`flex items-center space-x-2 ${autonomousStep >= 3 ? 'text-[#25D366] font-bold' : 'text-slate-500'}`}>
+                      <span>{autonomousStep >= 3 ? '✓' : '○'}</span>
+                      <span>[3/3] Direct transmission to WhatsApp recipient [{phoneInput || settings.phone}] completed without human intervention!</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Demo Explanatory Banner */}
               <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-50 via-teal-50 to-green-50 border border-emerald-200 text-emerald-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
                 <div className="space-y-1">

@@ -121,6 +121,15 @@ export default function UnifiedWeatherHub({
               <span className="text-[10px] text-slate-300 block font-normal">
                 Wind {currentWind} km/h • Rain Prob {rainProbabilityMax}%
               </span>
+              {!isSprayingSafe && (
+                <button
+                  onClick={onOpenWhatsAppAlerts}
+                  className="pt-0.5 w-full text-left flex items-center space-x-1 text-[10px] text-amber-300 hover:text-white underline cursor-pointer"
+                >
+                  <WhatsAppIcon className="w-3 h-3 text-[#25D366]" />
+                  <span>Send WhatsApp Alert (Demo)</span>
+                </button>
+              )}
             </div>
 
             <div className="p-3 rounded-2xl bg-white/10 backdrop-blur-xs border border-white/15 text-white space-y-1">

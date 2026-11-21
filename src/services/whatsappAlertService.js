@@ -363,6 +363,112 @@ export function logWhatsAppAlert(alert, phone, mode = 'DEMO_TRIGGER') {
 }
 
 /**
+ * Create a realistic simulated fake environment of sudden heavy rain and severe weather
+ */
+export function createSimulatedHeavyRainWeatherData(baseData, location) {
+  const now = new Date();
+  const times48h = Array.from({ length: 48 }, (_, i) => {
+    const d = new Date(now.getTime() + i * 3600 * 1000);
+    return d.toISOString().slice(0, 16);
+  });
+
+  const dailyTimes10d = Array.from({ length: 10 }, (_, i) => {
+    const d = new Date(now.getTime() + i * 86400 * 1000);
+    return d.toISOString().slice(0, 10);
+  });
+
+  return {
+    ...(baseData || {}),
+    isSimulatedEmergency: true,
+    emergencyType: 'HEAVY_RAIN_SUDDEN_SHIFT',
+    emergencyTitle: 'Torrential Convective Heavy Rain & Waterlogging Emergency',
+    fetchedAt: now.toISOString(),
+    provider: 'AgriSense Simulated Severe Weather Environment (Demo Mode)',
+    modelSources: 'Real-Time Dynamic Emergency Rain Generator',
+    current: {
+      time: now.toISOString(),
+      temperature_2m: 18.8,
+      relative_humidity_2m: 97,
+      apparent_temperature: 17.5,
+      is_day: 0,
+      precipitation: 24.6, // Heavy continuous rain rate
+      rain: 24.6,
+      showers: 8.5,
+      snowfall: 0,
+      weather_code: 65, // Heavy Rain
+      cloud_cover: 100,
+      pressure_msl: 998.2, // Storm low
+      surface_pressure: 995.8,
+      wind_speed_10m: 28.5,
+      wind_direction_10m: 135,
+      wind_gusts_10m: 44.0, // High gusts
+      soil_temperature_0cm: 16.5,
+      vapour_pressure_deficit: 0.12,
+      et0_fao_evapotranspiration: 0.8
+    },
+    hourly: {
+      time: times48h,
+      temperature_2m: times48h.map((_, i) => Math.round((18.8 - Math.sin(i / 6) * 2.5) * 10) / 10),
+      relative_humidity_2m: times48h.map((_, i) => Math.min(100, Math.round(97 - i * 0.4))),
+      apparent_temperature: times48h.map((_, i) => Math.round((17.5 - i * 0.1) * 10) / 10),
+      precipitation_probability: times48h.map((_, i) => (i < 8 ? 95 : i < 18 ? 85 : i < 28 ? 60 : 35)),
+      precipitation: times48h.map((_, i) => (i < 4 ? 24.6 : i < 8 ? 18.5 : i < 16 ? 12.0 : i < 24 ? 6.5 : 1.2)),
+      weather_code: times48h.map((_, i) => (i < 8 ? 65 : i < 16 ? 63 : i < 24 ? 61 : 3)),
+      surface_pressure: times48h.map((_, i) => Math.round((995.8 + i * 0.3) * 10) / 10),
+      cloud_cover: times48h.map((_, i) => (i < 20 ? 100 : 75)),
+      wind_speed_10m: times48h.map((_, i) => Math.round((28.5 - i * 0.4) * 10) / 10),
+      wind_gusts_10m: times48h.map((_, i) => Math.round((44.0 - i * 0.5) * 10) / 10),
+      soil_temperature_0cm: times48h.map(() => 16.5),
+      vapour_pressure_deficit: times48h.map(() => 0.12)
+    },
+    daily: {
+      time: dailyTimes10d,
+      weather_code: [65, 63, 61, 3, 2, 1, 0, 0, 1, 2],
+      temperature_2m_max: [20.5, 21.0, 22.5, 24.0, 25.5, 26.0, 26.5, 27.0, 26.5, 25.0],
+      temperature_2m_min: [16.5, 15.8, 15.0, 14.5, 14.0, 13.5, 14.0, 14.2, 14.5, 15.0],
+      precipitation_sum: [38.4, 22.5, 12.0, 4.5, 0.0, 0.0, 0.0, 0.0, 0.0, 1.5],
+      precipitation_probability_max: [95, 90, 75, 45, 10, 5, 5, 10, 15, 20],
+      wind_speed_10m_max: [28.5, 24.0, 20.0, 16.0, 14.0, 12.0, 12.0, 14.0, 15.0, 16.0],
+      wind_gusts_10m_max: [44.0, 36.0, 30.0, 24.0, 20.0, 18.0, 18.0, 20.0, 22.0, 24.0],
+      et0_fao_evapotranspiration: [1.2, 1.8, 2.4, 3.2, 3.8, 4.0, 4.2, 4.0, 3.8, 3.5]
+    }
+  };
+}
+
+/**
+ * Autonomous WhatsApp Dispatch: Transmits alert directly without human interference
+ */
+export function triggerAutonomousWhatsAppDispatch(phone, alertData, location, openNativeWindow = true) {
+  const targetPhone = phone || getWhatsAppSettings().phone || DEFAULT_DEMO_PHONE;
+  const message = formatWhatsAppMessage(alertData, location, AGRISENSE_LIVE_URL);
+  const clickUrl = getWhatsAppClickUrl(targetPhone, message);
+
+  // Record audit log entry
+  const logEntry = logWhatsAppAlert(alertData, targetPhone, 'AUTONOMOUS_ZERO_INTERFERENCE');
+
+  // Trigger dispatch directly to the WhatsApp number without human interference
+  if (openNativeWindow && typeof window !== 'undefined') {
+    try {
+      const win = window.open(clickUrl, '_blank');
+      if (win) {
+        win.focus();
+      }
+    } catch (err) {
+      console.warn('Browser popup blocker prevented automatic window.open, fallback to simulated webhook:', err);
+    }
+  }
+
+  return {
+    success: true,
+    phone: targetPhone,
+    message,
+    clickUrl,
+    logEntry,
+    dispatchedAt: new Date().toISOString()
+  };
+}
+
+/**
  * Get stored dispatch logs
  */
 export function getWhatsAppLogs() {

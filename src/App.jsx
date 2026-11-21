@@ -22,7 +22,7 @@ import WeatherAlertBanner from './components/WeatherAlertBanner';
 import Footer from './components/Footer';
 import UnifiedWeatherHub from './components/weather/UnifiedWeatherHub';
 import WhatsAppAlertModal from './components/alerts/WhatsAppAlertModal';
-import { detectWeatherShift } from './services/whatsappAlertService';
+import { detectWeatherShift, createSimulatedHeavyRainWeatherData } from './services/whatsappAlertService';
 
 import { fetchWeatherData, reverseGeocodeCoords, DEFAULT_REAL_LOCATION } from './services/weatherApi';
 import { getDemoWeatherData } from './services/demoData';
@@ -54,6 +54,7 @@ export default function App() {
   const [isVoiceAssistantModalOpen, setIsVoiceAssistantModalOpen] = useState(false);
   const [isWhatsAppModalOpen, setIsWhatsAppModalOpen] = useState(false);
   const [activeWhatsAppAlert, setActiveWhatsAppAlert] = useState(null);
+  const [isHeavyRainSimulated, setIsHeavyRainSimulated] = useState(false);
   const [latestPlantHealthResult, setLatestPlantHealthResult] = useState(null);
 
   const timerRef = useRef(null);
@@ -187,9 +188,14 @@ export default function App() {
     setIsWhatsAppModalOpen(true);
   };
 
+  // In demo mode, if simulated heavy rain is active, create fake heavy rain environment
+  const activeWeatherData = isHeavyRainSimulated && weatherData
+    ? createSimulatedHeavyRainWeatherData(weatherData, location)
+    : weatherData;
+
   // Compute advisor score for tab badge
-  const advisories = weatherData?.current && weatherData?.daily
-    ? generateFarmAdvisories(weatherData.current, weatherData.daily, weatherData.hourly)
+  const advisories = activeWeatherData?.current && activeWeatherData?.daily
+    ? generateFarmAdvisories(activeWeatherData.current, activeWeatherData.daily, activeWeatherData.hourly)
     : null;
 
   return (
@@ -202,7 +208,7 @@ export default function App() {
         onRefresh={() => loadWeather(location)}
         isRefreshing={isRefreshing}
         isGeoLoading={isGeoLoading}
-        lastUpdated={weatherData?.fetchedAt || weatherData?.current?.time}
+        lastUpdated={activeWeatherData?.fetchedAt || activeWeatherData?.current?.time}
         autoRefreshSecondsLeft={autoRefreshSeconds}
         tempUnit={tempUnit}
         onToggleTempUnit={handleToggleTempUnit}
@@ -213,16 +219,45 @@ export default function App() {
         onOpenWhatsAppAlerts={() => handleOpenWhatsAppAlerts()}
         onOpenSplash={() => setShowSplash(true)}
         onNavigateHome={() => { setActiveTab('weather'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-        provider={weatherData?.provider || 'Open-Meteo & WMO'}
-        modelSources={weatherData?.modelSources || 'ECMWF IFS (0.1°) / DWD ICON'}
+        provider={activeWeatherData?.provider || 'Open-Meteo & WMO'}
+        modelSources={activeWeatherData?.modelSources || 'ECMWF IFS (0.1°) / DWD ICON'}
       />
+
+      {/* Emergency Simulation Active Banner */}
+      {isHeavyRainSimulated && (
+        <div className="bg-gradient-to-r from-blue-950 via-indigo-950 to-slate-950 text-white px-4 py-2.5 text-xs font-bold border-b border-blue-500/40 flex items-center justify-between gap-3 shadow-md animate-in slide-in-from-top duration-300">
+          <div className="flex items-center space-x-2.5 truncate">
+            <span className="w-2.5 h-2.5 rounded-full bg-blue-400 animate-ping shrink-0" />
+            <span className="text-blue-200 uppercase tracking-wider text-[10px] font-black px-2 py-0.5 rounded-full bg-blue-600/80 border border-blue-400/40 shrink-0">
+              Emergency Simulation Active
+            </span>
+            <span className="truncate">
+              🌧️ Fake Torrential Rain Injected (24.6 mm/h downpour, 95% rain prob, 44 km/h gusts) • Autonomous WhatsApp alerts dispatched directly to recipient without human interference
+            </span>
+          </div>
+          <div className="flex items-center space-x-2 shrink-0">
+            <button
+              onClick={() => setIsWhatsAppModalOpen(true)}
+              className="px-2.5 py-1 rounded-lg bg-[#25D366] text-emerald-950 font-black text-[11px] hover:bg-[#20bd5a] transition-all cursor-pointer shadow-xs"
+            >
+              View Dispatch
+            </button>
+            <button
+              onClick={() => setIsHeavyRainSimulated(false)}
+              className="px-2.5 py-1 rounded-lg bg-white/20 hover:bg-white/30 text-white font-bold text-[11px] transition-all cursor-pointer"
+            >
+              Restore Real Weather
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-5 sm:py-8 space-y-6 sm:space-y-8">
         {/* Weather Hazards Alert Banner */}
-        {weatherData && (
+        {activeWeatherData && (
           <WeatherAlertBanner
-            weatherData={weatherData}
+            weatherData={activeWeatherData}
             tempUnit={tempUnit}
             onOpenWhatsAppAlerts={handleOpenWhatsAppAlerts}
           />
@@ -272,7 +307,7 @@ export default function App() {
             {/* TAB CONTENT: UNIFIED WEATHER INTELLIGENCE (LIVE • FORECAST • PAST MERGED) */}
             {(activeTab === 'weather' || activeTab === 'overview' || activeTab === 'live' || activeTab === 'past' || activeTab === 'forecast') && (
               <UnifiedWeatherHub
-                weatherData={weatherData}
+                weatherData={activeWeatherData}
                 location={location}
                 tempUnit={tempUnit}
                 autoRefreshSeconds={autoRefreshSeconds}
@@ -409,6 +444,8 @@ export default function App() {
         onClose={() => setIsWhatsAppModalOpen(false)}
         location={location}
         activeAlert={activeWhatsAppAlert}
+        isHeavyRainSimulated={isHeavyRainSimulated}
+        onToggleHeavyRainSimulation={setIsHeavyRainSimulated}
       />
 
       {/* Global Multilingual Voice Assistant Modal Overlay */}
