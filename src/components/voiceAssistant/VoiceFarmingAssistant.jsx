@@ -108,14 +108,18 @@ export default function VoiceFarmingAssistant({
     soilAnalysis: farmTelemetryService.getSoilMeasurements()
   });
 
+  const chatFeedRef = useRef(null);
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
   const isMountedRef = useRef(true);
 
-  // Auto-scroll to latest message
+  // Auto-scroll inside chat feed container only (prevents window scrolling)
   const scrollToBottom = useCallback((smooth = true) => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto' });
+    if (chatFeedRef.current) {
+      chatFeedRef.current.scrollTo({
+        top: chatFeedRef.current.scrollHeight,
+        behavior: smooth ? 'smooth' : 'auto'
+      });
     }
   }, []);
 
@@ -406,7 +410,7 @@ export default function VoiceFarmingAssistant({
   ];
 
   return (
-    <div className={`flex flex-col bg-slate-950 text-white rounded-3xl border border-emerald-500/25 shadow-2xl overflow-hidden ${isModal ? 'max-h-[90vh] h-[780px]' : 'min-h-[720px]'}`}>
+    <div className={`flex flex-col bg-slate-950 text-white rounded-3xl border border-emerald-500/25 shadow-2xl overflow-hidden ${isModal ? 'max-h-[90vh] h-[780px]' : 'h-[750px]'}`}>
       
       {/* 1. Header Toolbar */}
       <div className="p-4 sm:p-5 bg-gradient-to-r from-emerald-950 via-[#072518] to-slate-950 border-b border-emerald-800/40 flex items-center justify-between gap-3 shrink-0">
@@ -497,7 +501,7 @@ export default function VoiceFarmingAssistant({
       </div>
 
       {/* 2. Chat Message Feed (Scrollable) */}
-      <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 scrollbar-thin scrollbar-thumb-emerald-800/60 bg-[#07130e]/70">
+      <div ref={chatFeedRef} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 scrollbar-thin scrollbar-thumb-emerald-800/60 bg-[#07130e]/70">
         {conversationHistory.map((msg) => {
           const isUser = msg.role === 'user';
           return (
