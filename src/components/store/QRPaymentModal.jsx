@@ -14,6 +14,7 @@ import {
   FileCheck
 } from 'lucide-react';
 import { storeClient } from '../../services/storeClientService';
+import phonepeQrImg from '../../assets/phonepe-qr-square.png';
 
 export default function QRPaymentModal({ orderData, isOpen, onClose, onPaymentConfirmed }) {
   const [paymentMode, setPaymentMode] = useState('DYNAMIC'); // 'DYNAMIC' | 'STATIC_UTR'
@@ -220,24 +221,27 @@ export default function QRPaymentModal({ orderData, isOpen, onClose, onPaymentCo
               {/* TAB 1: Dynamic UPI 2.0 QR */}
               {paymentMode === 'DYNAMIC' && (
                 <div className="space-y-3">
-                  <div className="inline-block p-4 bg-white rounded-3xl border-2 border-dashed border-emerald-600/40 shadow-inner my-1">
-                    {payment.qr_svg ? (
-                      <div
-                        dangerouslySetInnerHTML={{ __html: payment.qr_svg }}
-                        className="mx-auto flex items-center justify-center"
+                  <div className="inline-block p-4 bg-white rounded-3xl border-2 border-emerald-600/40 shadow-inner my-1">
+                    <div className="relative mx-auto flex items-center justify-center">
+                      <img
+                        src={phonepeQrImg}
+                        alt="Official PhonePe UPI QR Code"
+                        className="w-64 h-64 object-contain mx-auto rounded-2xl shadow-md border border-slate-200"
                       />
-                    ) : (
-                      <div className="w-60 h-60 flex items-center justify-center bg-slate-100 rounded-2xl">
-                        <QrCode className="w-20 h-20 text-slate-400 animate-pulse" />
-                      </div>
-                    )}
-                    <p className="text-[11px] font-bold text-slate-600 mt-2">
+                    </div>
+                    <div className="flex items-center justify-center gap-1.5 mt-2.5">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                      <p className="text-[11px] font-black text-slate-800 tracking-wide">
+                        Official PhonePe Merchant UPI QR
+                      </p>
+                    </div>
+                    <p className="text-[11px] font-bold text-slate-600 mt-1">
                       UPI VPA: <span className="font-mono text-emerald-900 font-extrabold">agrisense.payments@icici</span>
                     </p>
                   </div>
 
                   <p className="text-[11px] text-slate-500 font-medium">
-                    This dynamic QR securely locks the payable amount to <span className="font-black text-emerald-900">₹{grandTotal.toFixed(2)}</span> with transaction note <span className="font-mono text-slate-700 font-bold">{orderNumber}</span>.
+                    Scan with <span className="font-bold text-slate-700">PhonePe, Google Pay, Paytm</span> or any UPI app to pay <span className="font-black text-emerald-900">₹{grandTotal.toFixed(2)}</span> for Order <span className="font-mono text-slate-700 font-bold">{orderNumber}</span>.
                   </p>
                 </div>
               )}
@@ -254,6 +258,18 @@ export default function QRPaymentModal({ orderData, isOpen, onClose, onPaymentCo
                     <p className="leading-relaxed">
                       A physical shop counter QR does <b>not</b> automatically pass your order amount to your phone.
                       You must manually type <b>₹{grandTotal.toFixed(2)}</b> in your UPI app and enter the 12-digit UTR below for order confirmation.
+                    </p>
+                  </div>
+
+                  {/* Counter QR Display */}
+                  <div className="p-3 bg-white rounded-2xl border border-slate-200 text-center shadow-xs">
+                    <img
+                      src={phonepeQrImg}
+                      alt="Official PhonePe Store Counter QR"
+                      className="w-48 h-48 object-contain mx-auto rounded-xl border border-slate-200 shadow-xs"
+                    />
+                    <p className="text-[10px] font-bold text-slate-600 mt-1.5">
+                      Scan Counter QR & Pay <span className="font-mono font-black text-emerald-800">₹{grandTotal.toFixed(2)}</span>
                     </p>
                   </div>
 
