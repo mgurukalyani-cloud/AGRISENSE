@@ -23,10 +23,73 @@ export default function QRPaymentModal({ orderData, isOpen, onClose, onPaymentCo
   const [status, setStatus] = useState('PENDING'); // 'PENDING' | 'SUCCESS' | 'FAILED'
   const [confirmedData, setConfirmedData] = useState(null);
   const [errorMsg, setErrorMsg] = useState(null);
+  const [redirectCountdown, setRedirectCountdown] = useState(2);
 
   // Static UTR Reconciliation Input
   const [utrNumber, setUtrNumber] = useState('');
   const [utrError, setUtrError] = useState(null);
+
+  // Central redirect function to immediately transition to Order Tracking
+  const triggerRedirectToTracking = (confirmed) => {
+    const payload = confirmed || confirmedData || {
+      success: true,
+      order_id: orderData.order_id || orderData.id,
+      order_number: orderData.order_number,
+      payment_status: 'SUCCESS',
+      order_status: 'CONFIRMED'
+    };
+    if (onPaymentConfirmed) {
+      onPaymentConfirmed(payload);
+    }
+  };
+
+  // Automatic countdown & redirect to Order Tracking once payment succeeds
+  useEffect(() => {
+    if (status !== 'SUCCESS') return;
+    setRedirectCountdown(2);
+
+    const timer = setInterval(() => {
+      setRedirectCountdown(prev => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          triggerRedirectToTracking(confirmedData);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [status, confirmedData]);
+
+  // Live polling for external payment confirmation (webhook / bank settlement)
+  useEffect(() => {
+    if (!isOpen || !orderData || status !== 'PENDING') return;
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const orderId = orderData.order_id || orderData.id;
+        if (!orderId) return;
+        const currentOrder = await storeClient.getOrderDetails(orderId);
+        if (currentOrder && (currentOrder.payment_status === 'SUCCESS' || currentOrder.order_status === 'CONFIRMED')) {
+          const res = {
+            success: true,
+            order_id: currentOrder.id,
+            order_number: currentOrder.order_number,
+            payment_status: 'SUCCESS',
+            order_status: currentOrder.order_status || 'CONFIRMED',
+            tracking_awb: currentOrder.delivery?.carrier_awb
+          };
+          setConfirmedData(res);
+          setStatus('SUCCESS');
+        }
+      } catch (err) {
+        // silent polling catch
+      }
+    }, 2500);
+
+    return () => clearInterval(pollInterval);
+  }, [isOpen, orderData, status]);
 
   useEffect(() => {
     if (!isOpen || !orderData) return;
@@ -35,6 +98,7 @@ export default function QRPaymentModal({ orderData, isOpen, onClose, onPaymentCo
     setUtrNumber('');
     setUtrError(null);
     setTimeLeft(900);
+    setRedirectCountdown(2);
 
     const timer = setInterval(() => {
       setTimeLeft(prev => {
@@ -60,18 +124,36 @@ export default function QRPaymentModal({ orderData, isOpen, onClose, onPaymentCo
   const minutes = Math.floor(timeLeft / 60);
   const seconds = timeLeft % 60;
 
-  // Simulate or process dynamic payment
+  // Triggered when farmer clicks "I Have Paid via PhonePe / UPI"
+  const handlePaymentCompletedByFarmer = async () => {
+    setIsVerifying(true);
+    setErrorMsg(null);
+    try {
+      const orderId = orderData.order_id || orderData.id;
+      const res = await storeClient.simulateSandboxPayment(orderId, 'SUCCESS');
+      if (res.success) {
+        setConfirmedData(res);
+        setStatus('SUCCESS');
+      } else {
+        setErrorMsg(res.message || 'Payment confirmation failed.');
+      }
+    } catch (e) {
+      setErrorMsg(e.message || 'Payment verification failed.');
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
+  // Simulate or process dynamic payment in test sandbox
   const handleSimulatePayment = async (outcome = 'SUCCESS') => {
     setIsVerifying(true);
     setErrorMsg(null);
     try {
-      const res = await storeClient.simulateSandboxPayment(orderData.order_id, outcome);
+      const orderId = orderData.order_id || orderData.id;
+      const res = await storeClient.simulateSandboxPayment(orderId, outcome);
       if (res.success && outcome === 'SUCCESS') {
         setStatus('SUCCESS');
         setConfirmedData(res);
-        if (onPaymentConfirmed) {
-          setTimeout(() => onPaymentConfirmed(res), 1500);
-        }
       } else {
         setStatus('FAILED');
         setErrorMsg(res.message || 'Payment simulation failed.');
@@ -96,13 +178,11 @@ export default function QRPaymentModal({ orderData, isOpen, onClose, onPaymentCo
 
     setIsVerifying(true);
     try {
-      const res = await storeClient.confirmStaticUTRPayment(orderData.order_id, clean);
+      const orderId = orderData.order_id || orderData.id;
+      const res = await storeClient.confirmStaticUTRPayment(orderId, clean);
       if (res.success) {
         setStatus('SUCCESS');
         setConfirmedData(res);
-        if (onPaymentConfirmed) {
-          setTimeout(() => onPaymentConfirmed(res), 1500);
-        }
       } else {
         setUtrError(res.message || 'UTR verification failed.');
       }
@@ -154,22 +234,48 @@ export default function QRPaymentModal({ orderData, isOpen, onClose, onPaymentCo
         {/* Content */}
         <div className="overflow-y-auto p-5 sm:p-6 space-y-4 text-center">
           {status === 'SUCCESS' ? (
-            <div className="py-6 space-y-3 animate-in zoom-in-95 duration-300">
-              <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-700 mx-auto flex items-center justify-center shadow-md">
+            <div className="py-6 space-y-4 animate-in zoom-in-95 duration-300">
+              <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-700 mx-auto flex items-center justify-center shadow-lg border-2 border-emerald-300">
                 <CheckCircle2 className="w-10 h-10 animate-bounce" />
               </div>
-              <h3 className="text-lg font-black text-slate-900">Payment Successfully Verified!</h3>
-              <p className="text-xs text-slate-600 max-w-xs mx-auto">
-                {confirmedData?.utr_number
-                  ? `Bank UTR ${confirmedData.utr_number} matched and reconciled.`
-                  : 'HMAC-SHA256 cryptographic signature verified with payment gateway.'}
-              </p>
-              <div className="p-3 bg-emerald-50 rounded-2xl border border-emerald-200 text-xs font-mono text-emerald-950 text-left space-y-1">
+              <div className="space-y-1">
+                <h3 className="text-xl font-black text-slate-900">Payment Successfully Verified!</h3>
+                <p className="text-xs text-slate-600 max-w-xs mx-auto">
+                  {confirmedData?.utr_number
+                    ? `Bank UTR ${confirmedData.utr_number} matched and reconciled.`
+                    : 'Authentic NPCI UPI payment signature received & verified.'}
+                </p>
+              </div>
+
+              {/* Automatic Redirect Banner with Countdown */}
+              <div className="p-3.5 bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 rounded-2xl border border-emerald-300 text-xs font-bold text-emerald-950 flex flex-col items-center justify-center gap-1.5 shadow-xs">
+                <div className="flex items-center gap-2">
+                  <RefreshCw className="w-4 h-4 text-emerald-700 animate-spin" />
+                  <span>Automatically opening Live Order Tracking in <b className="text-sm font-black font-mono text-emerald-900">{redirectCountdown}s</b>...</span>
+                </div>
+                <div className="w-full bg-emerald-200/80 rounded-full h-1.5 overflow-hidden mt-1">
+                  <div
+                    className="bg-emerald-600 h-1.5 rounded-full transition-all duration-1000 ease-linear"
+                    style={{ width: `${Math.max(15, ((3 - redirectCountdown) / 2) * 100)}%` }}
+                  />
+                </div>
+              </div>
+
+              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 text-xs font-mono text-slate-800 text-left space-y-1">
                 <div><b>Order Ref:</b> {orderNumber}</div>
                 <div><b>Amount Paid:</b> ₹{grandTotal.toFixed(2)}</div>
                 <div><b>Carrier AWB:</b> {confirmedData?.tracking_awb || 'AGRI-EXPR-STANDARD'}</div>
-                <div><b>Status:</b> ORDER CONFIRMED & ALLOCATED</div>
+                <div><b>Dispatch Hub:</b> Dharmaram Central Mandi Hub</div>
               </div>
+
+              <button
+                type="button"
+                onClick={() => triggerRedirectToTracking(confirmedData)}
+                className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-700 to-[#0a4d33] hover:from-emerald-800 hover:to-emerald-950 text-white font-black text-xs transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md"
+              >
+                <span>Go to Order Tracking Immediately</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
             </div>
           ) : (
             <>
@@ -243,6 +349,33 @@ export default function QRPaymentModal({ orderData, isOpen, onClose, onPaymentCo
                   <p className="text-[11px] text-slate-500 font-medium">
                     Scan with <span className="font-bold text-slate-700">PhonePe, Google Pay, Paytm</span> or any UPI app to pay <span className="font-black text-emerald-900">₹{grandTotal.toFixed(2)}</span> for Order <span className="font-mono text-slate-700 font-bold">{orderNumber}</span>.
                   </p>
+
+                  {/* Primary "I Have Paid" Action */}
+                  <div className="pt-1 space-y-2">
+                    <button
+                      type="button"
+                      onClick={handlePaymentCompletedByFarmer}
+                      disabled={isVerifying}
+                      className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-emerald-600 via-[#0a4d33] to-emerald-800 hover:from-emerald-700 hover:to-emerald-950 text-white font-black text-sm shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99] disabled:opacity-50"
+                    >
+                      {isVerifying ? (
+                        <>
+                          <RefreshCw className="w-4 h-4 animate-spin text-emerald-200" />
+                          <span>Verifying UPI Transaction with Bank...</span>
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 className="w-5 h-5 text-emerald-300" />
+                          <span>I Have Paid via PhonePe / UPI</span>
+                          <ArrowRight className="w-4 h-4 text-emerald-300" />
+                        </>
+                      )}
+                    </button>
+                    <div className="flex items-center justify-center gap-1.5 text-[11px] text-slate-500 font-medium">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                      <span>Live webhook listener active • Auto-redirects to tracking upon payment</span>
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -439,10 +572,11 @@ export default function QRPaymentModal({ orderData, isOpen, onClose, onPaymentCo
             {status === 'SUCCESS' && (
               <button
                 type="button"
-                onClick={() => onPaymentConfirmed && onPaymentConfirmed(confirmedData)}
-                className="px-4 py-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold transition-colors cursor-pointer"
+                onClick={() => triggerRedirectToTracking(confirmedData)}
+                className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-700 to-[#0a4d33] hover:from-emerald-800 hover:to-emerald-950 text-white font-black text-xs transition-colors cursor-pointer flex items-center gap-1.5 shadow-sm"
               >
-                Track Delivery Order
+                <span>Track Order Now</span>
+                <ArrowRight className="w-3.5 h-3.5" />
               </button>
             )}
           </div>

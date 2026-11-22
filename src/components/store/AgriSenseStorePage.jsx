@@ -115,9 +115,15 @@ export default function AgriSenseStorePage() {
   };
 
   const handlePaymentConfirmed = (confirmedResult) => {
+    const targetOrderId =
+      confirmedResult?.order_id ||
+      confirmedResult?.id ||
+      activePaymentOrder?.order_id ||
+      activePaymentOrder?.id;
+
     setActivePaymentOrder(null);
-    if (confirmedResult?.order_id) {
-      setActiveTrackingOrderId(confirmedResult.order_id);
+    if (targetOrderId) {
+      setActiveTrackingOrderId(targetOrderId);
     }
   };
 

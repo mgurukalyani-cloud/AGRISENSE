@@ -184,29 +184,25 @@ server.listen(4390, '127.0.0.1', async () => {
     // Capture 4: QR Payment Modal
     await takeScreenshot('live-store-qr-payment.png');
 
-    // 6. Simulate Payment Success in Sandbox
-    console.log('Simulating Payment Success...');
+    // 6. Complete Payment via "I Have Paid" or Simulator
+    console.log('Triggering Payment Completion...');
     await evalCode(`
       (() => {
-        const simBtn = Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('Simulate Payment Success'));
-        if (simBtn) { simBtn.click(); return true; }
+        const payDoneBtn = Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('I Have Paid via PhonePe') || b.textContent.includes('Simulate Payment Success'));
+        if (payDoneBtn) { payDoneBtn.click(); return true; }
         return false;
       })()
     `);
-    await new Promise(r => setTimeout(r, 3000));
+    await new Promise(r => setTimeout(r, 800));
 
-    // 7. Click Continue to Tracking (or auto-opened tracking)
-    console.log('Navigating to Order Tracking...');
-    await evalCode(`
-      (() => {
-        const trackBtn = Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('Continue to Tracking'));
-        if (trackBtn) { trackBtn.click(); return true; }
-        return false;
-      })()
-    `);
-    await new Promise(r => setTimeout(r, 2000));
+    // Capture 4B: Payment Success Countdown & Auto-Redirect Banner
+    await takeScreenshot('live-store-payment-success-countdown.png');
 
-    // Capture 5: Order Tracking Modal
+    // Wait for the automatic redirect to finish (2 seconds countdown + transition)
+    console.log('Waiting for automatic transition to Live Order Tracking...');
+    await new Promise(r => setTimeout(r, 2600));
+
+    // Capture 5: Automatically Opened Order Tracking Modal
     await takeScreenshot('live-store-order-tracking.png');
 
     // 8. Open Invoice Preview

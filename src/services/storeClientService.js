@@ -629,17 +629,23 @@ class StoreClientService {
   }
 
   async simulateSandboxPayment(orderId, outcome = 'SUCCESS') {
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/payments/sandbox-simulate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ order_id: orderId, outcome })
-      });
-      if (res.ok) {
-        return await res.json();
+    if (this.isBackendAvailable !== false) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 1200);
+        const res = await fetch(`${API_BASE_URL}/api/payments/sandbox-simulate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ order_id: orderId, outcome }),
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+        if (res.ok) {
+          return await res.json();
+        }
+      } catch (e) {
+        // offline fallback
       }
-    } catch (e) {
-      // offline fallback
     }
 
     // Local Order Payment Simulation
@@ -728,18 +734,24 @@ class StoreClientService {
     this.saveLocalOrders(orders);
 
     // Also attempt backend update if online
-    try {
-      await fetch(`${API_BASE_URL}/api/store/admin/orders/${order.id}/status`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          new_status: 'CONFIRMED',
-          comment: `Static QR 12-digit UTR verified: ${cleanUTR}`,
-          updated_by: 'MERCHANT_RECONCILIATION'
-        })
-      });
-    } catch (e) {
-      // offline is fine
+    if (this.isBackendAvailable !== false) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 1200);
+        await fetch(`${API_BASE_URL}/api/store/admin/orders/${order.id}/status`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            new_status: 'CONFIRMED',
+            comment: `Static QR 12-digit UTR verified: ${cleanUTR}`,
+            updated_by: 'MERCHANT_RECONCILIATION'
+          }),
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+      } catch (e) {
+        // offline is fine
+      }
     }
 
     return {
