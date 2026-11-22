@@ -424,20 +424,23 @@ export default function VoiceFarmingAssistant({
                 AgriSense AI Assistant
               </h2>
               {/* Connection Status Pill */}
-              {backendStatus.is_configured ? (
-                <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-900/80 text-emerald-300 border border-emerald-500/40">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  <span>{backendStatus.provider?.toUpperCase()} • {backendStatus.active_model}</span>
+              <button
+                onClick={() => setShowConfigModal(true)}
+                className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-900/80 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-800/80 cursor-pointer transition-colors shadow-xs"
+                title="Click to configure custom Google Gemini / Groq API Key or inspect active model"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                <span>
+                  {backendStatus.provider === 'gemini'
+                    ? 'GEMINI 1.5 FLASH (DIRECT)'
+                    : backendStatus.provider === 'groq'
+                    ? 'GROQ LLAMA 3.3 (DIRECT)'
+                    : backendStatus.provider === 'agrisense' || !backendStatus.provider
+                    ? 'AGRISENSE AI (ONLINE)'
+                    : `${backendStatus.provider?.toUpperCase()} • ${backendStatus.active_model}`}
                 </span>
-              ) : (
-                <button
-                  onClick={() => setShowConfigModal(true)}
-                  className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-900/60 text-amber-300 border border-amber-500/40 hover:bg-amber-800/70 cursor-pointer transition-colors"
-                >
-                  <AlertCircle className="w-3 h-3 text-amber-400" />
-                  <span>Configure API Key</span>
-                </button>
-              )}
+                <Key className="w-2.5 h-2.5 text-emerald-400 opacity-70 ml-0.5" />
+              </button>
             </div>
             <p className="text-[11px] text-emerald-300/80 font-medium">
               Real LLM Conversational Intelligence • Multi-Turn Memory • 22 Indian Languages
@@ -753,8 +756,7 @@ export default function VoiceFarmingAssistant({
 
             <div className="space-y-3 text-xs text-slate-300">
               <p>
-                AgriSense connects directly to genuine Large Language Models via backend REST APIs.
-                Select your preferred provider:
+                AgriSense includes a powerful built-in autonomous intelligence engine, and also supports direct in-browser LLM calls to Google Gemini, Groq, or OpenAI if you prefer using your personal API key:
               </p>
 
               {/* Provider Selection */}
