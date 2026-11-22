@@ -22,6 +22,7 @@ import {
 import LanguageSelectorButton from './LanguageSelectorButton';
 import { getLanguageByCode } from '../i18n/languages';
 import { WhatsAppIcon } from './alerts/WhatsAppAlertModal';
+import agrisenseLogo from '../assets/agrisense-logo-circle.png';
 
 export default function Header({
   location,
@@ -143,9 +144,13 @@ export default function Header({
             className="flex items-center space-x-2.5 sm:space-x-3 text-left group cursor-pointer transition-all hover:opacity-95 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 rounded-2xl p-1 -m-1 shrink-0"
             title={t('app.returnHome', 'Return to Home Page')}
           >
-            {/* Vibrant Gradient Emblem */}
-            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-tr from-emerald-700 via-emerald-600 to-teal-400 flex items-center justify-center text-white shadow-lg shadow-emerald-700/25 ring-2 ring-emerald-400/40 group-hover:ring-emerald-500 group-hover:scale-105 transition-all shrink-0">
-              <Sprout className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+            {/* AgriSense Official Emblem Logo */}
+            <div className="w-11 h-11 sm:w-13 sm:h-13 rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-900/25 ring-2 ring-emerald-400/50 group-hover:ring-emerald-500 group-hover:scale-105 transition-all shrink-0 overflow-hidden bg-gradient-to-br from-emerald-950 via-emerald-900 to-teal-950 p-0.5">
+              <img
+                src={agrisenseLogo}
+                alt="AgriSense Official Logo"
+                className="w-full h-full object-contain rounded-xl drop-shadow-md"
+              />
             </div>
 
             <div className="shrink-0 min-w-0">
@@ -157,8 +162,8 @@ export default function Header({
                   By The FOF
                 </span>
               </div>
-              <p className="text-[10.5px] sm:text-xs text-emerald-700/90 font-medium hidden md:block whitespace-nowrap">
-                Smarter Farming. Better Decisions. Higher Profits.
+              <p className="text-[10.5px] sm:text-xs text-emerald-700 font-bold hidden md:block whitespace-nowrap">
+                Smart Agriculture • Better Tomorrow
               </p>
             </div>
           </button>

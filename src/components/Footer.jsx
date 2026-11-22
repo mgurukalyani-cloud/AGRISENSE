@@ -8,6 +8,7 @@ import {
   Heart,
   ExternalLink
 } from 'lucide-react';
+import agrisenseLogo from '../assets/agrisense-logo-circle.png';
 
 export default function Footer({ onOpenModulesDrawer, onOpenSettings }) {
   const { t } = useTranslation();
@@ -18,13 +19,22 @@ export default function Footer({ onOpenModulesDrawer, onOpenSettings }) {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           {/* Col 1: Branding & Description */}
           <div className="md:col-span-2 space-y-3">
-            <div className="flex items-center space-x-2.5">
-              <div className="w-8 h-8 rounded-lg bg-emerald-700 flex items-center justify-center text-white">
-                <Sprout className="w-4 h-4" />
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 rounded-2xl overflow-hidden shadow-md ring-1 ring-emerald-600/40 shrink-0 bg-emerald-950 p-0.5">
+                <img
+                  src={agrisenseLogo}
+                  alt="AgriSense Logo"
+                  className="w-full h-full object-contain rounded-xl"
+                />
               </div>
-              <span className="text-lg font-bold text-slate-900 tracking-tight">
-                {t('app.title', 'AgriSense')} — {t('app.subtitle', 'Smart Agriculture')}
-              </span>
+              <div>
+                <span className="text-lg font-black text-slate-900 tracking-tight block">
+                  {t('app.title', 'AgriSense')}
+                </span>
+                <span className="text-[11px] text-emerald-700 font-bold block -mt-0.5">
+                  Smart Agriculture • Better Tomorrow
+                </span>
+              </div>
             </div>
             <p className="text-xs text-slate-500 leading-relaxed max-w-md">
               {t('footer.desc', 'A high-precision agrometeorological platform designed for farmers, agronomists, and researchers. Synthesizes atmospheric data, soil thermodynamics, and numerical forecasts to guide daily farm decisions.')}

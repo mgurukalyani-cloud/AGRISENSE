@@ -27,6 +27,7 @@ import OrderTrackingModal from './OrderTrackingModal';
 import InvoicePrintModal from './InvoicePrintModal';
 import FarmerDashboardModal from './FarmerDashboardModal';
 import AdminStoreDashboardModal from './AdminStoreDashboardModal';
+import agrisenseLogo from '../../assets/agrisense-logo-circle.png';
 
 export default function AgriSenseStorePage() {
   const [categories, setCategories] = useState([]);
@@ -153,9 +154,23 @@ export default function AgriSenseStorePage() {
               </span>
             </div>
 
-            <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-              AgriSense Kisan E-Commerce & Agricultural Supply Store
-            </h1>
+            <div className="flex items-center gap-3 pt-1">
+              <div className="w-12 h-12 rounded-2xl overflow-hidden shadow-lg ring-2 ring-emerald-400/50 shrink-0 bg-emerald-950 p-0.5">
+                <img
+                  src={agrisenseLogo}
+                  alt="AgriSense Official Logo"
+                  className="w-full h-full object-contain rounded-xl"
+                />
+              </div>
+              <div>
+                <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                  AgriSense Kisan E-Commerce Store
+                </h1>
+                <p className="text-[11px] text-emerald-300 font-bold">
+                  Smart Agriculture • Better Tomorrow
+                </p>
+              </div>
+            </div>
             <p className="text-xs sm:text-sm text-emerald-100/90 leading-relaxed font-medium">
               Order certified chemical fertilizers, organic compost, micronutrients, CIBRC pesticides, certified seeds, and farm equipment with official Direct Benefit Transfer (DBT) subsidy savings and farm delivery.
             </p>

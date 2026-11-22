@@ -1,5 +1,6 @@
 import React from 'react';
 import { X, Printer, Download, CheckCircle2, ShieldCheck, Sprout } from 'lucide-react';
+import agrisenseLogo from '../../assets/agrisense-logo-circle.png';
 
 export default function InvoicePrintModal({ order, isOpen, onClose }) {
   if (!isOpen || !order) return null;
@@ -53,14 +54,14 @@ export default function InvoicePrintModal({ order, isOpen, onClose }) {
           {/* Header */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-slate-300 pb-5 gap-4">
             <div>
-              <div className="flex items-center space-x-2">
-                <div className="w-8 h-8 rounded-lg bg-[#0a4d33] text-white flex items-center justify-center font-black">
-                  🌱
+              <div className="flex items-center space-x-2.5">
+                <div className="w-10 h-10 rounded-xl overflow-hidden shadow-xs ring-1 ring-emerald-800/30 shrink-0 bg-emerald-950 p-0.5">
+                  <img src={agrisenseLogo} alt="AgriSense Logo" className="w-full h-full object-contain rounded-lg" />
                 </div>
                 <div>
                   <h1 className="text-xl font-black text-[#0a4d33] tracking-tight">AgriSense Kisan Store</h1>
                   <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">
-                    Government Certified Agricultural Supply & DBT Services
+                    Smart Agriculture • Government Certified DBT & Supply Services
                   </p>
                 </div>
               </div>
