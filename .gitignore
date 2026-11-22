@@ -20,6 +20,10 @@ scratch-cdp*
 .chrome-headless-data/
 check_browser.mjs
 /*.png
+!/favicon.png
+!/agrisense-logo.png
+!/agrisense-logo-circle.png
+!/phonepe-qr-cropped.png
 
 # Python
 __pycache__/

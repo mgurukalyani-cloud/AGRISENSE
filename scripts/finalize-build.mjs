@@ -29,11 +29,29 @@ if (fs.existsSync(path.join(DIST, 'index.html'))) {
   copyRecursive(DIST, ROOT);
   copyRecursive(path.join(ROOT, 'public/audio'), path.join(ROOT, 'audio'));
 
+  // Ensure both asset naming variations exist for logo & favicon in assets/
+  const assetsDir = path.join(ROOT, 'assets');
+  if (fs.existsSync(path.join(assetsDir, 'favicon-DMZZLJt9.png'))) {
+    fs.copyFileSync(
+      path.join(assetsDir, 'favicon-DMZZLJt9.png'),
+      path.join(assetsDir, 'agrisense-logo-circle-DMZZLJt9.png')
+    );
+  }
+
   if (fs.existsSync(DOCS)) {
     fs.rmSync(DOCS, { recursive: true, force: true });
   }
   copyRecursive(DIST, DOCS);
   copyRecursive(path.join(ROOT, 'public/audio'), path.join(DOCS, 'audio'));
+
+  const docsAssetsDir = path.join(DOCS, 'assets');
+  if (fs.existsSync(path.join(docsAssetsDir, 'favicon-DMZZLJt9.png'))) {
+    fs.copyFileSync(
+      path.join(docsAssetsDir, 'favicon-DMZZLJt9.png'),
+      path.join(docsAssetsDir, 'agrisense-logo-circle-DMZZLJt9.png')
+    );
+  }
+
   fs.writeFileSync(path.join(DOCS, '404.html'), distHtml);
   fs.writeFileSync(path.join(DOCS, '.nojekyll'), '');
   console.log('✓ Finalized root and docs/ copies with production bundle for static GitHub Pages');
